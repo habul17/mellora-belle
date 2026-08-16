@@ -2,3 +2,4 @@ node_modules
 .env
 dist
 PLAN.md
+BUILD_LOG.md
