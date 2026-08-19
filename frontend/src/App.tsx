@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react'
 function App() {
 
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("");
+  const [products, setProducts] = useState([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadHealth() {
+    async function getProducts() {
       try {
-        const response = await fetch("http://localhost:4000/health");
+        const response = await fetch("http://localhost:4000/products");
         const data = await response.json();
 
-        setStatus(data.status);
+        setProducts(data.products);
 
       } catch (err) {
         setError("Could not reach the server");
@@ -21,7 +21,7 @@ function App() {
         setLoading(false);
       }
     }
-    loadHealth();
+    getProducts();
   }, [])
 
   let content = "";
@@ -31,7 +31,7 @@ function App() {
   } else if (error) {
     content = error;
   } else {
-    content = status;
+    content = JSON.stringify(products);
   }
 
   return (

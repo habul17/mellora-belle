@@ -3,3 +3,4 @@ node_modules
 dist
 PLAN.md
 BUILD_LOG.md
+**/src/generated
