@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-
+import { useState, useEffect } from "react"
 
 function App() {
 
@@ -10,7 +9,7 @@ function App() {
   useEffect(() => {
     async function getProducts() {
       try {
-        const response = await fetch("http://localhost:4000/products");
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/products`);
         const data = await response.json();
 
         setProducts(data.products);
