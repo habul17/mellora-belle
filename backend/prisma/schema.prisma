@@ -13,9 +13,43 @@ datasource db {
 }
 
 
+enum Size {
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
 model Product {
- id String @id @default(cuid())
- name String
- price Int
- isActive Boolean
+  id             String    @id @default(cuid())
+  name           String
+  slug           String    @unique
+  description    String
+  basePrice      Int
+  compareAtPrice Int?
+  weight         Int
+  images         String[]
+  isActive       Boolean
+  categoryId     String
+  category       Category  @relation(fields: [categoryId], references: [id])
+  variants       Variant[]
+}
+
+model Variant {
+  id            String   @id @default(cuid())
+  size          Size
+  color         String
+  sku           String   @unique
+  stockQuantity Int
+  priceOverride Int?
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
 }
