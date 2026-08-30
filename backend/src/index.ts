@@ -7,6 +7,8 @@ dotenv.config();
 
 const app = express();
 
+app.use(express.json());
+
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
 
 
@@ -24,7 +26,7 @@ app.get("/products/:slug", async (req, res) => {
 
     const getProduct = await prisma.product.findUnique({ where: { slug: req.params.slug }, include: { category: true, variants: true } });
 
-    if(!getProduct) {
+    if (!getProduct) {
         return res.status(404).json({
             error: "Product not found"
         })
@@ -33,6 +35,16 @@ app.get("/products/:slug", async (req, res) => {
     res.json({
         product: getProduct
     })
+})
+
+app.patch("/variants/:id/stock", async (req, res) => {
+    const stockQuantity = req.body.stockQuantity;
+
+    const updatedVariant = await prisma.variant.update({
+        where: { id: req.params.id },
+        data: { stockQuantity }
+    });
+    res.json({variant: updatedVariant});
 })
 
 app.get("/health", (req, res) => {

@@ -6,6 +6,8 @@ function ProductList() {
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [sortOrder, setSortOrder] = useState("");
 
     useEffect(() => {
         async function getProducts() {
@@ -32,9 +34,30 @@ function ProductList() {
         return <div>{error}</div>
     }
 
+    const filteredProducts = products.filter((product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const sortedProducts = [...filteredProducts].sort((a,b) => {
+        if (sortOrder === "price-asc") return a.basePrice - b.basePrice;
+        if (sortOrder === "price-desc") return b.basePrice - a.basePrice;
+        return 0;
+    });
+
     return (
         <div>
-            {products.map((product) => (
+            <input type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)} />
+
+                <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                    <option value="">Default</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="price-desc">Price: High to Low</option>
+                </select>
+
+            {sortedProducts.map((product) => (
                 <Link key={product.id} to={`/products/${product.slug}`}>
                     <img src={product.images[0]} alt={product.name} width={200} />
                     <h3>{product.name}</h3>
