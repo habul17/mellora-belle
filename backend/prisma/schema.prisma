@@ -53,3 +53,16 @@ model Variant {
   productId     String
   product       Product  @relation(fields: [productId], references: [id])
 }
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+}
