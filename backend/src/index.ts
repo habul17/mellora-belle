@@ -3,9 +3,11 @@ import dotenv from "dotenv"
 import cors from "cors"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
+import crypto from "node:crypto"
 import { prisma } from "./lib/prisma.js"
 import { Prisma } from "./generated/prisma/client.js"
 import { requireAuth } from "./middleware/requireAuth.js"
+import { sendEmail } from "./lib/email.js"
 
 
 dotenv.config();
@@ -63,6 +65,80 @@ app.post("/signup", async (req, res) => {
         res.status(500).json({ error: "Something went wrong" })
     }
 
+})
+
+app.post("/forgot-password", async (req, res) => {
+    const email = req.body.email;
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+            return res.json({ message: "If that email exists, a reset link has been sent" });
+        }
+
+        const rawToken = crypto.randomBytes(32).toString("hex");
+        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+        await prisma.passwordResetToken.create({
+            data: {
+                tokenHash,
+                userId: user.id,
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+            }
+        })
+
+        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+
+        await sendEmail(
+            user.email,
+            "Reset your Mellora Belle password",
+            `<p>Click the link below to reset your password. This link expires in 15 minutes.</p><a href="${resetLink}">${resetLink}</a>`
+        );
+
+        res.json({ message: "If that email exists, a reset link has been sent" })
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+})
+
+app.post("/reset-password", async (req, res) => {
+    const { token, newPassword } = req.body;
+
+    try {
+        const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+        const resetToken = await prisma.passwordResetToken.findUnique({
+            where: { tokenHash }
+        })
+
+        if (!resetToken) {
+            return res.status(400).json({ error: "Invalid or expired token" });
+        }
+
+        if (resetToken.expiresAt < new Date()) {
+            return res.status(400).json({ error: "Invalid or expired token" })
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        await prisma.user.update({
+            where: { id: resetToken.userId },
+            data: { passwordHash }
+        });
+
+        await prisma.passwordResetToken.delete({
+            where: { id: resetToken.id }
+        });
+
+        res.json({ message: "Password reset Successful " })
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" })
+    }
 })
 
 
