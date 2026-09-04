@@ -41,7 +41,7 @@ app.post("/login", async (req, res) => {
 
             if (!totpCode) {
                 return res.status(401).json({
-                    error: "2FA code requried"
+                    error: "2FA code required"
                 })
             }
 
