@@ -8,6 +8,8 @@ import { prisma } from "./lib/prisma.js"
 import { Prisma } from "./generated/prisma/client.js"
 import { requireAuth } from "./middleware/requireAuth.js"
 import { sendEmail } from "./lib/email.js"
+import { authenticator } from "otplib"
+import QRCode from "qrcode"
 
 
 dotenv.config();
@@ -33,6 +35,29 @@ app.post("/login", async (req, res) => {
         if (!passwordMatches) {
             return res.status(401).json({ error: "Invalid email or password" });
         }
+
+        if (user.totpSecret) {
+            const totpCode = req.body.totpCode;
+
+            if (!totpCode) {
+                return res.status(401).json({
+                    error: "2FA code requried"
+                })
+            }
+
+            const isValidCode = authenticator.verify({
+                token: totpCode,
+                secret: user.totpSecret
+            })
+
+            if (!isValidCode) {
+                return res.status(401).json({
+                    error: "Invalid 2FA code"
+                })
+            }
+        }
+
+
 
         const accessToken = jwt.sign(
             { userId: user.id, role: user.role },
@@ -101,6 +126,31 @@ app.post("/forgot-password", async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ error: "Something went wrong" });
+    }
+})
+
+
+app.post("/admin/2fa/setup", requireAuth, async (req, res) => {
+    const secret = authenticator.generateSecret();
+    const userId = (req as any).user.userId;
+
+    try {
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { totpSecret: secret }
+        });
+
+        const otpauthUrl = authenticator.keyuri(userId, "Mellora Belle", secret);
+        const qrCodeImage = await QRCode.toDataURL(otpauthUrl);
+
+        res.json({ secret, otpauthUrl, qrCodeImage });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            error: "Something went wrong"
+        });
     }
 })
 
