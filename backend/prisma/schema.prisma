@@ -65,7 +65,8 @@ model User {
   passwordHash String
   role         Role     @default(CUSTOMER)
   createdAt    DateTime @default(now())
-  resetTokens PasswordResetToken[]
+  resetTokens  PasswordResetToken[]
+  totpSecret   String?
 }
 
 model PasswordResetToken {
