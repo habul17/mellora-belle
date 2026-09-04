@@ -11,21 +11,26 @@ function AdminStock() {
         const newValue = editedStock[variantId];
         if (newValue === undefined) return;
 
+        const token = localStorage.getItem("accessToken");
+
         const response = await fetch(`${import.meta.env.VITE_API_URL}/variants/${variantId}/stock`, {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+            },
             body: JSON.stringify({ stockQuantity: newValue }),
         });
         const data = await response.json();
 
         setProducts((prevProducts) =>
             prevProducts.map((product) => ({
-                    ...product,
-                    variants: product.variants.map((v: any) =>
-                        v.id === variantId ? data.variant : v
-                    ),
-                }))
-            );
+                ...product,
+                variants: product.variants.map((v: any) =>
+                    v.id === variantId ? data.variant : v
+                ),
+            }))
+        );
     }
 
     useEffect(() => {
