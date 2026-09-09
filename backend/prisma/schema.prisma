@@ -52,6 +52,7 @@ model Variant {
   priceOverride Int?
   productId     String
   product       Product  @relation(fields: [productId], references: [id])
+  cartItems     CartItem[]
 }
 
 enum Role {
@@ -67,6 +68,7 @@ model User {
   createdAt    DateTime @default(now())
   resetTokens  PasswordResetToken[]
   totpSecret   String?
+  cart         Cart?
 }
 
 model PasswordResetToken {
@@ -76,4 +78,22 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Cart {
+  id     String     @id @default(cuid())
+  userId String     @unique
+  user   User       @relation(fields: [userId], references: [id])
+  items  CartItem[]
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id])
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  quantity  Int
+
+  @@unique([cartId, variantId])
 }
