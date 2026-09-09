@@ -242,6 +242,136 @@ app.patch("/variants/:id/stock", requireAuth, async (req, res) => {
 
 })
 
+app.post("/cart/items", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { variantId, quantity } = req.body;
+
+    try {
+        const cart = await prisma.cart.upsert({
+            where: { userId },
+            update: {},
+            create: { userId }
+        })
+
+        const variant = await prisma.variant.findUnique({ where: { id: variantId } });
+
+        if (!variant) {
+            return res.status(404).json({ error: "Variant not found" });
+        }
+
+        if (variant.stockQuantity < quantity) {
+            return res.status(400).json({ error: "Not enough stock" })
+        }
+
+        const cartItem = await prisma.cartItem.upsert({
+            where: { cartId_variantId: { cartId: cart.id, variantId } },
+            update: { quantity: { increment: quantity } },
+            create: { cartId: cart.id, variantId, quantity }
+        })
+
+        res.json({ cartItem });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            error: "Something went wrong"
+        })
+
+    }
+})
+
+app.get("/cart", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+
+    try {
+        const cart = await prisma.cart.findUnique({
+            where: { userId },
+            include: {
+                items: {
+                    include: {
+                        variant: {
+                            include: { product: true }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            return res.json({ items: [] });
+        }
+
+        res.json({ cart });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+})
+
+app.patch("/cart/items/:id", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const id = req.params.id;
+    const quantity = req.body.quantity;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const cartItem = await prisma.cartItem.findUnique({
+            where: { id },
+            include: { cart: true }
+        });
+
+        if (!cartItem || cartItem.cart.userId !== userId) {
+            return res.status(404).json({ error: "Cart item not found" });
+        }
+
+        const variant = await prisma.variant.findUnique({ where: { id: cartItem.variantId } });
+
+        if (variant && variant.stockQuantity < quantity) {
+            return res.status(400).json({ error: "Not enough stock" });
+        }
+
+        const updatedItem = await prisma.cartItem.update({
+            where: { id },
+            data: { quantity }
+        });
+
+        res.json({ cartItem: updatedItem });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+
+});
+
+app.delete("/cart/items/:id", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const cartItem = await prisma.cartItem.findUnique({
+            where: { id },
+            include: { cart: true }
+        });
+
+        if (!cartItem || cartItem.cart.userId !== userId) {
+            return res.status(404).json({ error: "Cart item not found" });
+        }
+
+        await prisma.cartItem.delete({ where: { id } });
+
+        res.json({ message: "Item removed from cart" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
 app.get("/health", (req, res) => {
     res.json({
         status: "ok"
