@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams } from "react-router-dom"
+import { addToGuestCart } from "../lib/guestCart"
 
 function ProductDetail() {
 
@@ -8,6 +9,8 @@ function ProductDetail() {
     const [loading, setLoading] = useState(true);
     const [product, setProduct] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+    const [message, setMessage] = useState("");
 
     useEffect(() => {
         async function getProduct() {
@@ -25,6 +28,46 @@ function ProductDetail() {
         }
         getProduct();
     }, [slug])
+
+    async function handleAddToCart() {
+        if (!selectedVariantId) {
+            setMessage("Please select a size");
+            return;
+        }
+
+        const variant = product.variants.find((v: any) => v.id === selectedVariantId);
+        const token = localStorage.getItem("accessToken");
+
+        if (token) {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/cart/items`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({ variantId: selectedVariantId, quantity: 1 }),
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                setMessage(data.error);
+                return;
+            }
+        } else {
+            addToGuestCart({
+                variantId: variant.id,
+                quantity: 1,
+                productName: product.name,
+                image: product.images[0],
+                price: variant.priceOverride ?? product.basePrice,
+                size: variant.size,
+                color: variant.color,
+            });
+        }
+
+        setMessage("Added to cart");
+    }
 
     if (loading) {
         return <div>Loading...</div>
@@ -49,10 +92,22 @@ function ProductDetail() {
             <p>{product.description}</p>
             <div>
                 {product.variants.map((variant: any) => (
-                    <span key={variant.id}>
-                        {variant.size} {variant.stockQuantity > 0 ? "" : "(Out of stock)"}
-                    </span>
+                    <button
+                        key={variant.id}
+                        disabled={variant.stockQuantity === 0}
+                        onClick={() => setSelectedVariantId(variant.id)}
+                        style={{
+                            marginRight: 8,
+                            fontWeight: selectedVariantId === variant.id ? "bold" : "normal",
+                        }}
+                    >
+                        {variant.size} {variant.stockQuantity === 0 ? "(Out of stock)" : ""}
+                    </button>
                 ))}
+            </div>
+            <div>
+                <button onClick={handleAddToCart}>Add to Cart</button>
+                {message && <p>{message}</p>}
             </div>
         </div>
     );
