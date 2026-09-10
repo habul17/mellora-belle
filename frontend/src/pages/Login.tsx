@@ -1,5 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { getGuestCart, saveGuestCart } from "../lib/guestCart"
+import type { GuestCartItem } from "../lib/guestCart"
 
 function Login() {
     const navigate = useNavigate();
@@ -24,7 +26,34 @@ function Login() {
         }
 
         localStorage.setItem("accessToken", data.accessToken);
+        await mergeGuestCart(data.accessToken);
         navigate("/admin");
+    }
+
+    async function mergeGuestCart(token: string) {
+        const guestItems = getGuestCart();
+        if (guestItems.length === 0) return;
+
+        const failed: GuestCartItem[] = [];
+
+        for (const item of guestItems) {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/cart/items`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({ variantId: item.variantId, quantity: item.quantity }),
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                failed.push(item);
+            }
+        }
+
+        saveGuestCart(failed);
     }
 
     return (
