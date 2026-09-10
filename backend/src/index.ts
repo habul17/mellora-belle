@@ -259,7 +259,13 @@ app.post("/cart/items", requireAuth, async (req, res) => {
             return res.status(404).json({ error: "Variant not found" });
         }
 
-        if (variant.stockQuantity < quantity) {
+        const existingItem = await prisma.cartItem.findUnique({
+            where: { cartId_variantId: { cartId: cart.id, variantId } }
+        });
+
+        const newQuantity = (existingItem?.quantity ?? 0) + quantity;
+
+        if (variant.stockQuantity < newQuantity) {
             return res.status(400).json({ error: "Not enough stock" })
         }
 
@@ -298,7 +304,7 @@ app.get("/cart", requireAuth, async (req, res) => {
         });
 
         if (!cart) {
-            return res.json({ items: [] });
+            return res.json({ cart: { items: [] } });
         }
 
         res.json({ cart });
