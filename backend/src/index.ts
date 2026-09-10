@@ -7,6 +7,7 @@ import crypto from "node:crypto"
 import { prisma } from "./lib/prisma.js"
 import { Prisma } from "./generated/prisma/client.js"
 import { requireAuth } from "./middleware/requireAuth.js"
+import { requireAdmin } from "./middleware/requireAdmin.js"
 import { sendEmail } from "./lib/email.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
@@ -129,8 +130,7 @@ app.post("/forgot-password", async (req, res) => {
     }
 })
 
-
-app.post("/admin/2fa/setup", requireAuth, async (req, res) => {
+app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
     const secret = authenticator.generateSecret();
     const userId = (req as any).user.userId;
 
@@ -191,7 +191,6 @@ app.post("/reset-password", async (req, res) => {
     }
 })
 
-
 app.get("/products", async (req, res) => {
 
     const getProducts = await prisma.product.findMany({ include: { category: true, variants: true } });
@@ -217,7 +216,7 @@ app.get("/products/:slug", async (req, res) => {
     })
 })
 
-app.patch("/variants/:id/stock", requireAuth, async (req, res) => {
+app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => {
     const stockQuantity = req.body.stockQuantity;
     const id = req.params.id;
 
