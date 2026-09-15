@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useParams } from "react-router-dom"
 import { addToGuestCart } from "../lib/guestCart"
+import { getToken, authFetch } from "../lib/api"
 
 function ProductDetail() {
 
@@ -36,19 +37,11 @@ function ProductDetail() {
         }
 
         const variant = product.variants.find((v: any) => v.id === selectedVariantId);
-        const token = localStorage.getItem("accessToken");
-
-        if (token) {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/cart/items`, {
+        if (getToken()) {
+            const data = await authFetch("/cart/items", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
                 body: JSON.stringify({ variantId: selectedVariantId, quantity: 1 }),
             });
-
-            const data = await response.json();
 
             if (data.error) {
                 setMessage(data.error);
