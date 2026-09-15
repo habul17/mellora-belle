@@ -377,6 +377,120 @@ app.delete("/cart/items/:id", requireAuth, async (req, res) => {
     }
 });
 
+const PHONE_REGEX = /^[6-9][0-9]{9}$/;
+const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
+const RESERVATION_MINUTES = 15;
+
+app.post("/checkout", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const { fullName, phone, addressLine1, addressLine2, city, state, pincode } = req.body;
+
+    if (!fullName || !addressLine1 || !city || !state) {
+        return res.status(400).json({ error: "Please fill in all address fields" });
+    }
+
+    if (!PHONE_REGEX.test(String(phone))) {
+        return res.status(400).json({ error: "Enter a valid 10-digit phone number" });
+    }
+
+    if (!PINCODE_REGEX.test(String(pincode))) {
+        return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
+    }
+
+    try {
+        const existingOrder = await prisma.order.findFirst({
+            where: {
+                userId,
+                status: "PENDING",
+                reservedUntil: { gt: new Date() }
+            },
+            include: { items: true }
+        });
+
+        if (existingOrder) {
+            const updatedOrder = await prisma.order.update({
+                where: { id: existingOrder.id },
+                data: {
+                    fullName,
+                    phone: String(phone),
+                    addressLine1,
+                    addressLine2: addressLine2 || null,
+                    city,
+                    state,
+                    pincode: String(pincode)
+                },
+                include: { items: true }
+            });
+
+            return res.json({ order: updatedOrder });
+        }
+
+        const cart = await prisma.cart.findUnique({
+            where: { userId },
+            include: {
+                items: {
+                    include: {
+                        variant: { include: { product: true } }
+                    }
+                }
+            }
+        });
+
+        if (!cart || cart.items.length === 0) {
+            return res.status(400).json({ error: "Your cart is empty" });
+        }
+
+        const order = await prisma.$transaction(async (tx) => {
+            const orderItems: { variantId: string; quantity: number; price: number }[] = [];
+            let totalAmount = 0;
+
+            for (const item of cart.items) {
+                const reserved = await tx.variant.updateMany({
+                    where: { id: item.variantId, stockQuantity: { gte: item.quantity } },
+                    data: { stockQuantity: { decrement: item.quantity } }
+                });
+
+                if (reserved.count === 0) {
+                    throw new Error(`OUT_OF_STOCK:${item.variant.product.name} (${item.variant.size})`);
+                }
+
+                const price = item.variant.priceOverride ?? item.variant.product.basePrice;
+                totalAmount += price * item.quantity;
+
+                orderItems.push({ variantId: item.variantId, quantity: item.quantity, price });
+            }
+
+            return tx.order.create({
+                data: {
+                    userId,
+                    totalAmount,
+                    fullName,
+                    phone: String(phone),
+                    addressLine1,
+                    addressLine2: addressLine2 || null,
+                    city,
+                    state,
+                    pincode: String(pincode),
+                    reservedUntil: new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000),
+                    items: { create: orderItems }
+                },
+                include: { items: true }
+            });
+        });
+
+        res.json({ order });
+
+    } catch (err) {
+        if (err instanceof Error && err.message.startsWith("OUT_OF_STOCK:")) {
+            return res.status(409).json({
+                error: `Sorry, ${err.message.replace("OUT_OF_STOCK:", "")} just went out of stock`
+            });
+        }
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
 app.get("/health", (req, res) => {
     res.json({
         status: "ok"
