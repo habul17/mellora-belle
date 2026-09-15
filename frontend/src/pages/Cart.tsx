@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react"
+import { Link } from "react-router-dom"
 import { getGuestCart, updateGuestCartItem, removeFromGuestCart } from "../lib/guestCart"
+import { getToken, authFetch } from "../lib/api"
 
 type CartLine = {
     id: string;
@@ -19,14 +21,8 @@ function Cart() {
 
 
     async function loadCart() {
-        const token = localStorage.getItem("accessToken");
-
-        if (token) {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/cart`, {
-                headers: { "Authorization": `Bearer ${token}` },
-            });
-
-            const data = await response.json();
+        if (getToken()) {
+            const data = await authFetch("/cart");
 
             setLines(
                 data.cart.items.map((item: any) => ({
@@ -63,19 +59,11 @@ function Cart() {
     async function changeQuantity(line: CartLine, newQuantity: number) {
         if (newQuantity < 1) return;
 
-        const token = localStorage.getItem("accessToken");
-
-        if (token) {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/cart/items/${line.id}`, {
+        if (getToken()) {
+            const data = await authFetch(`/cart/items/${line.id}`, {
                 method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
                 body: JSON.stringify({ quantity: newQuantity }),
             });
-
-            const data = await response.json();
 
             if (data.error) {
                 setMessage(data.error);
@@ -90,13 +78,8 @@ function Cart() {
     }
 
     async function removeLine(line: CartLine) {
-        const token = localStorage.getItem("accessToken");
-
-        if (token) {
-            await fetch(`${import.meta.env.VITE_API_URL}/cart/items/${line.id}`, {
-                method: "DELETE",
-                headers: { "Authorization": `Bearer ${token}` },
-            });
+        if (getToken()) {
+            await authFetch(`/cart/items/${line.id}`, { method: "DELETE" });
         } else {
             removeFromGuestCart(line.variantId);
         }
@@ -135,6 +118,7 @@ function Cart() {
                 </div>
             ))}
             <h2>Total: ₹{total}</h2>
+            <Link to="/checkout">Proceed to Checkout</Link>
         </div>
     );
 }
