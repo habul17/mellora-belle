@@ -9,6 +9,8 @@ import { Prisma } from "./generated/prisma/client.js"
 import { requireAuth } from "./middleware/requireAuth.js"
 import { requireAdmin } from "./middleware/requireAdmin.js"
 import { sendEmail } from "./lib/email.js"
+import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/releaseExpiredReservations.js"
+import { isServiceablePincode } from "./lib/shipping.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 
@@ -379,7 +381,22 @@ app.delete("/cart/items/:id", requireAuth, async (req, res) => {
 
 const PHONE_REGEX = /^[6-9][0-9]{9}$/;
 const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
-const RESERVATION_MINUTES = 15;
+const RESERVATION_MINUTES = Number(process.env.RESERVATION_MINUTES) || 15;
+const CLEANUP_INTERVAL_MINUTES = 1;
+
+// A pending order is a snapshot of the cart taken when checkout started.
+// If the cart has changed since, that snapshot is stale and must be rebuilt.
+function sameContents(
+    orderItems: { variantId: string; quantity: number }[],
+    cartItems: { variantId: string; quantity: number }[]
+) {
+    if (orderItems.length !== cartItems.length) return false;
+
+    const key = (items: { variantId: string; quantity: number }[]) =>
+        items.map((i) => `${i.variantId}:${i.quantity}`).sort().join("|");
+
+    return key(orderItems) === key(cartItems);
+}
 
 app.post("/checkout", requireAuth, async (req, res) => {
     const userId = (req as any).user.userId;
@@ -397,33 +414,12 @@ app.post("/checkout", requireAuth, async (req, res) => {
         return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
     }
 
+    if (!isServiceablePincode(String(pincode))) {
+        return res.status(400).json({ error: "Sorry, we don't deliver to this pincode yet" });
+    }
+
     try {
-        const existingOrder = await prisma.order.findFirst({
-            where: {
-                userId,
-                status: "PENDING",
-                reservedUntil: { gt: new Date() }
-            },
-            include: { items: true }
-        });
-
-        if (existingOrder) {
-            const updatedOrder = await prisma.order.update({
-                where: { id: existingOrder.id },
-                data: {
-                    fullName,
-                    phone: String(phone),
-                    addressLine1,
-                    addressLine2: addressLine2 || null,
-                    city,
-                    state,
-                    pincode: String(pincode)
-                },
-                include: { items: true }
-            });
-
-            return res.json({ order: updatedOrder });
-        }
+        await releaseExpiredReservations();
 
         const cart = await prisma.cart.findUnique({
             where: { userId },
@@ -436,7 +432,43 @@ app.post("/checkout", requireAuth, async (req, res) => {
             }
         });
 
-        if (!cart || cart.items.length === 0) {
+        const cartItems = cart?.items ?? [];
+
+        const existingOrder = await prisma.order.findFirst({
+            where: {
+                userId,
+                status: "PENDING",
+                reservedUntil: { gt: new Date() }
+            },
+            include: { items: true }
+        });
+
+        if (existingOrder) {
+            if (cartItems.length > 0 && !sameContents(existingOrder.items, cartItems)) {
+                // The cart changed after checkout started, so the reservation
+                // no longer matches what the customer expects to buy. Give the
+                // stale stock back and build a fresh order below.
+                await cancelAndReleaseStock(existingOrder);
+            } else {
+                const updatedOrder = await prisma.order.update({
+                    where: { id: existingOrder.id },
+                    data: {
+                        fullName,
+                        phone: String(phone),
+                        addressLine1,
+                        addressLine2: addressLine2 || null,
+                        city,
+                        state,
+                        pincode: String(pincode)
+                    },
+                    include: { items: true }
+                });
+
+                return res.json({ order: updatedOrder });
+            }
+        }
+
+        if (cartItems.length === 0) {
             return res.status(400).json({ error: "Your cart is empty" });
         }
 
@@ -444,7 +476,7 @@ app.post("/checkout", requireAuth, async (req, res) => {
             const orderItems: { variantId: string; quantity: number; price: number }[] = [];
             let totalAmount = 0;
 
-            for (const item of cart.items) {
+            for (const item of cartItems) {
                 const reserved = await tx.variant.updateMany({
                     where: { id: item.variantId, stockQuantity: { gte: item.quantity } },
                     data: { stockQuantity: { decrement: item.quantity } }
@@ -497,6 +529,10 @@ app.get("/health", (req, res) => {
     })
 })
 
+
+setInterval(() => {
+    releaseExpiredReservations().catch((err) => console.log("Reservation cleanup failed", err));
+}, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
 
 app.listen(process.env.PORT || 4000, () => {
     console.log(`Server Running On Port ${process.env.PORT || 4000}`);
