@@ -1,14 +1,18 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { getGuestCart, saveGuestCart } from "../lib/guestCart"
 import type { GuestCartItem } from "../lib/guestCart"
 
 function Login() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const redirectTo = searchParams.get("from") ?? "/";
+    const sessionExpired = searchParams.get("expired") === "1";
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [totpCode, setTotpCode] = useState("");
     const [needs2FA, setNeeds2FA] = useState(false);
+    const [message, setMessage] = useState("");
 
 
     async function handleSubmit() {
@@ -25,9 +29,14 @@ function Login() {
             return;
         }
 
+        if (data.error) {
+            setMessage(data.error);
+            return;
+        }
+
         localStorage.setItem("accessToken", data.accessToken);
         await mergeGuestCart(data.accessToken);
-        navigate("/admin");
+        navigate(redirectTo);
     }
 
     async function mergeGuestCart(token: string) {
@@ -71,6 +80,9 @@ function Login() {
                 onChange={(e) => setPassword(e.target.value)}
             />
             <button onClick={handleSubmit}>Log In</button>
+
+            {sessionExpired && !message && <p>Your session expired. Please log in again.</p>}
+            {message && <p>{message}</p>}
 
             {needs2FA && (
                 <input
