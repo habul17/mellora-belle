@@ -32,7 +32,9 @@ function Checkout() {
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [paying, setPaying] = useState(false);
-    const [paymentDone, setPaymentDone] = useState(false);
+    const [confirmation, setConfirmation] = useState<
+        "checking" | "paid" | "refund-needed" | "unconfirmed" | null
+    >(null);
 
     if (!token) {
         return <Navigate to="/login?from=/checkout" replace />;
@@ -81,6 +83,10 @@ function Checkout() {
             return;
         }
 
+        // Razorpay keeps its window open after a failed attempt so the customer
+        // can retry inside it. Remember the failure for when they close it.
+        let paymentFailed = false;
+
         const razorpay = new (window as any).Razorpay({
             key: data.keyId,
             order_id: data.razorpayOrderId,
@@ -94,21 +100,85 @@ function Checkout() {
             timeout: data.expiresInSeconds,
             handler: () => {
                 setPaying(false);
-                setPaymentDone(true);
+                confirmPayment(order.id);
             },
             modal: {
-                ondismiss: () => setPaying(false),
+                ondismiss: () => {
+                    setPaying(false);
+
+                    if (paymentFailed) {
+                        setMessage("Your payment didn't go through and no money was taken. You can try again.");
+                    }
+                },
             },
+        });
+
+        razorpay.on("payment.failed", () => {
+            paymentFailed = true;
         });
 
         razorpay.open();
     }
 
-    if (order && paymentDone) {
+    // Razorpay's window saying "success" is not proof on its own. Ask the
+    // backend, which checks with Razorpay directly, a few times before giving up.
+    async function confirmPayment(orderId: string) {
+        setConfirmation("checking");
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const data = await authFetch(`/orders/${orderId}/confirm-payment`, { method: "POST" });
+
+            if (data.status === "PAID") {
+                setConfirmation("paid");
+                return;
+            }
+
+            if (data.status === "CANCELLED" && data.paymentStatus === "PAID") {
+                setConfirmation("refund-needed");
+                return;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+
+        setConfirmation("unconfirmed");
+    }
+
+    if (order && confirmation) {
         return (
             <div>
-                <h1>Thank you!</h1>
-                <p>Your payment went through. We're confirming it now.</p>
+                {confirmation === "checking" && (
+                    <p>Confirming your payment, please don't close this page...</p>
+                )}
+
+                {confirmation === "paid" && (
+                    <>
+                        <h1>Thank you!</h1>
+                        <p>Your order is confirmed.</p>
+                    </>
+                )}
+
+                {confirmation === "refund-needed" && (
+                    <>
+                        <h1>Sorry, this item sold out</h1>
+                        <p>
+                            Your payment arrived after your hold expired, and the item sold out
+                            in the meantime. Your full payment will be refunded to your original
+                            payment method within 5-7 working days.
+                        </p>
+                    </>
+                )}
+
+                {confirmation === "unconfirmed" && (
+                    <>
+                        <h1>Payment received</h1>
+                        <p>
+                            We're still confirming it with the bank. This can take a few
+                            minutes. Please don't pay again.
+                        </p>
+                    </>
+                )}
+
                 <p>Order id: {order.id}</p>
                 <p><Link to="/">Continue shopping</Link></p>
             </div>
