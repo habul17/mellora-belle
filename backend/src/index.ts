@@ -12,6 +12,7 @@ import { sendEmail } from "./lib/email.js"
 import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/releaseExpiredReservations.js"
 import { isServiceablePincode } from "./lib/shipping.js"
 import { getRazorpay, toPaise } from "./lib/razorpay.js"
+import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 
@@ -607,6 +608,45 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
     }
 });
 
+// Called by the browser right after Razorpay's window reports success. The
+// browser's word is never taken for it: if the webhook has not confirmed the
+// payment yet, the backend asks Razorpay itself.
+app.post("/orders/:id/confirm-payment", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const order = await prisma.order.findUnique({
+            where: { id },
+            include: { payment: true }
+        });
+
+        if (!order || order.userId !== userId) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        if (order.payment && order.payment.status !== "PAID") {
+            await reconcilePayment(order.payment);
+        }
+
+        const latest = await prisma.order.findUniqueOrThrow({
+            where: { id },
+            include: { payment: true }
+        });
+
+        res.json({
+            status: latest.status,
+            paymentStatus: latest.payment?.status ?? null
+        });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
 app.post("/webhooks/razorpay", async (req, res) => {
     const signature = req.headers["x-razorpay-signature"];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -646,8 +686,7 @@ app.post("/webhooks/razorpay", async (req, res) => {
 
     try {
         const payment = await prisma.payment.findUnique({
-            where: { razorpayOrderId: entity.order_id },
-            include: { order: { include: { items: true } } }
+            where: { razorpayOrderId: entity.order_id }
         });
 
         if (!payment) {
@@ -672,34 +711,8 @@ app.post("/webhooks/razorpay", async (req, res) => {
             return res.json({ received: true });
         }
 
-        await prisma.$transaction(async (tx) => {
-            const claimed = await tx.payment.updateMany({
-                where: { id: payment.id, status: { not: "PAID" } },
-                data: {
-                    status: "PAID",
-                    razorpayPaymentId: entity.id,
-                    rawWebhookPayload: req.body
-                }
-            });
-
-            // A duplicate delivery of an event already processed. Everything
-            // below has been done once already and must not be done again.
-            if (claimed.count === 0) return;
-
-            await tx.order.update({
-                where: { id: payment.orderId },
-                data: { status: "PAID" }
-            });
-
-            // Take the purchased lines out of the cart, but leave anything the
-            // customer added after checkout so they do not silently lose it.
-            await tx.cartItem.deleteMany({
-                where: {
-                    cart: { userId: payment.order.userId },
-                    variantId: { in: payment.order.items.map((item) => item.variantId) }
-                }
-            });
-        });
+        // A duplicate delivery comes back "already-paid" and changes nothing.
+        await markOrderPaid(payment.id, entity.id, req.body);
 
         res.json({ received: true });
 
