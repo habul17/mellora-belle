@@ -124,6 +124,7 @@ model Order {
   reservedUntil DateTime
   createdAt     DateTime    @default(now())
   items         OrderItem[]
+  payment       Payment?
 }
 
 model OrderItem {
@@ -134,4 +135,23 @@ model OrderItem {
   variant   Variant @relation(fields: [variantId], references: [id])
   quantity  Int
   price     Int
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String        @unique
+  order             Order         @relation(fields: [orderId], references: [id])
+  razorpayOrderId   String        @unique
+  razorpayPaymentId String?       @unique
+  status            PaymentStatus @default(CREATED)
+  amount            Int
+  rawWebhookPayload Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
