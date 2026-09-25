@@ -1,4 +1,5 @@
 import { prisma } from "./prisma.js"
+import { reconcilePayment } from "./confirmPayment.js"
 
 type ReleasableOrder = {
     id: string;
@@ -34,13 +35,25 @@ export async function releaseExpiredReservations() {
             status: "PENDING",
             reservedUntil: { lte: new Date() }
         },
-        include: { items: true }
+        include: { items: true, payment: true }
     });
 
     let releasedCount = 0;
 
     for (const order of expiredOrders) {
         try {
+            if (order.payment) {
+                // The customer opened the payment window. Before giving the
+                // stock away, make sure the money did not actually arrive with
+                // its webhook lost. If Razorpay cannot be reached, this throws
+                // and the order is skipped until the next sweep — holding
+                // stock a minute longer is far cheaper than cancelling a
+                // paid order.
+                const paid = await reconcilePayment(order.payment);
+
+                if (paid) continue;
+            }
+
             const released = await cancelAndReleaseStock(order);
 
             if (released) releasedCount++;
