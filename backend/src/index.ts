@@ -554,6 +554,10 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
             return res.status(400).json({ error: "Your reservation expired. Please checkout again" });
         }
 
+        // Worked out here rather than in the browser, because a customer's
+        // phone clock can be minutes off and would close the window too early.
+        const expiresInSeconds = Math.floor((order.reservedUntil.getTime() - Date.now()) / 1000);
+
         // Re-opening the payment sheet must not create a second Razorpay order
         // against the same purchase.
         if (order.payment) {
@@ -561,7 +565,8 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
                 keyId: process.env.RAZORPAY_KEY_ID,
                 razorpayOrderId: order.payment.razorpayOrderId,
                 amount: order.payment.amount,
-                orderId: order.id
+                orderId: order.id,
+                expiresInSeconds
             });
         }
 
@@ -571,6 +576,9 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
             amount,
             currency: "INR",
             receipt: order.id,
+            // Take the money immediately. Left to the default, a payment can sit
+            // "authorized" and never fire the payment.captured webhook.
+            payment_capture: true,
             notes: { orderId: order.id }
         });
 
@@ -586,7 +594,8 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
             keyId: process.env.RAZORPAY_KEY_ID,
             razorpayOrderId: razorpayOrder.id,
             amount,
-            orderId: order.id
+            orderId: order.id,
+            expiresInSeconds
         });
 
     } catch (err) {
