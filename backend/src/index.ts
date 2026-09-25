@@ -11,6 +11,7 @@ import { requireAdmin } from "./middleware/requireAdmin.js"
 import { sendEmail } from "./lib/email.js"
 import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/releaseExpiredReservations.js"
 import { isServiceablePincode } from "./lib/shipping.js"
+import { getRazorpay, toPaise } from "./lib/razorpay.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 
@@ -19,7 +20,13 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({
+    // Razorpay signs the exact bytes it sends. Re-stringifying the parsed
+    // object would not reliably reproduce them, so keep the original buffer.
+    verify: (req, _res, buf) => {
+        (req as any).rawBody = buf;
+    }
+}));
 
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
 
@@ -519,6 +526,178 @@ app.post("/checkout", requireAuth, async (req, res) => {
             });
         }
         console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+app.post("/orders/:id/payment", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const order = await prisma.order.findUnique({
+            where: { id },
+            include: { payment: true }
+        });
+
+        if (!order || order.userId !== userId) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        if (order.status !== "PENDING") {
+            return res.status(400).json({ error: "This order is no longer awaiting payment" });
+        }
+
+        if (order.reservedUntil < new Date()) {
+            return res.status(400).json({ error: "Your reservation expired. Please checkout again" });
+        }
+
+        // Re-opening the payment sheet must not create a second Razorpay order
+        // against the same purchase.
+        if (order.payment) {
+            return res.json({
+                keyId: process.env.RAZORPAY_KEY_ID,
+                razorpayOrderId: order.payment.razorpayOrderId,
+                amount: order.payment.amount,
+                orderId: order.id
+            });
+        }
+
+        const amount = toPaise(order.totalAmount);
+
+        const razorpayOrder = await getRazorpay().orders.create({
+            amount,
+            currency: "INR",
+            receipt: order.id,
+            notes: { orderId: order.id }
+        });
+
+        await prisma.payment.create({
+            data: {
+                orderId: order.id,
+                razorpayOrderId: razorpayOrder.id,
+                amount
+            }
+        });
+
+        res.json({
+            keyId: process.env.RAZORPAY_KEY_ID,
+            razorpayOrderId: razorpayOrder.id,
+            amount,
+            orderId: order.id
+        });
+
+    } catch (err) {
+        if (err instanceof Error && err.message === "RAZORPAY_KEYS_MISSING") {
+            return res.status(500).json({ error: "Payments are not configured yet" });
+        }
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+app.post("/webhooks/razorpay", async (req, res) => {
+    const signature = req.headers["x-razorpay-signature"];
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const rawBody = (req as any).rawBody as Buffer | undefined;
+
+    if (!secret) {
+        console.log("RAZORPAY_WEBHOOK_SECRET is not set");
+        return res.status(500).json({ error: "Webhook not configured" });
+    }
+
+    if (typeof signature !== "string" || !rawBody) {
+        return res.status(400).json({ error: "Missing signature" });
+    }
+
+    const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    const signatureBuffer = Buffer.from(signature, "utf8");
+
+    // Compared byte-by-byte in constant time. A normal === leaks how much of
+    // the signature was correct through how long the comparison took, which is
+    // enough to forge one guess at a time.
+    if (
+        expectedBuffer.length !== signatureBuffer.length ||
+        !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+    ) {
+        return res.status(400).json({ error: "Invalid signature" });
+    }
+
+    const event = req.body.event;
+    const entity = req.body.payload?.payment?.entity;
+
+    // Anything we do not handle is still a success as far as Razorpay is
+    // concerned. Answering with an error would make it retry forever.
+    if (event !== "payment.captured" && event !== "payment.failed") {
+        return res.json({ received: true });
+    }
+
+    try {
+        const payment = await prisma.payment.findUnique({
+            where: { razorpayOrderId: entity.order_id },
+            include: { order: { include: { items: true } } }
+        });
+
+        if (!payment) {
+            console.log("Webhook for unknown razorpay order", entity.order_id);
+            return res.json({ received: true });
+        }
+
+        if (event === "payment.failed") {
+            // Deliberately does not cancel the order. The reservation expires
+            // on its own, and until it does the customer can retry and get the
+            // same order back.
+            await prisma.payment.updateMany({
+                where: { id: payment.id, status: { not: "PAID" } },
+                data: { status: "FAILED", rawWebhookPayload: req.body }
+            });
+
+            return res.json({ received: true });
+        }
+
+        if (entity.amount !== payment.amount) {
+            console.log(`Amount mismatch on ${payment.id}: paid ${entity.amount}, expected ${payment.amount}`);
+            return res.json({ received: true });
+        }
+
+        await prisma.$transaction(async (tx) => {
+            const claimed = await tx.payment.updateMany({
+                where: { id: payment.id, status: { not: "PAID" } },
+                data: {
+                    status: "PAID",
+                    razorpayPaymentId: entity.id,
+                    rawWebhookPayload: req.body
+                }
+            });
+
+            // A duplicate delivery of an event already processed. Everything
+            // below has been done once already and must not be done again.
+            if (claimed.count === 0) return;
+
+            await tx.order.update({
+                where: { id: payment.orderId },
+                data: { status: "PAID" }
+            });
+
+            // Take the purchased lines out of the cart, but leave anything the
+            // customer added after checkout so they do not silently lose it.
+            await tx.cartItem.deleteMany({
+                where: {
+                    cart: { userId: payment.order.userId },
+                    variantId: { in: payment.order.items.map((item) => item.variantId) }
+                }
+            });
+        });
+
+        res.json({ received: true });
+
+    } catch (err) {
+        console.log(err);
+        // A 500 tells Razorpay to retry, which is what we want if our own
+        // database was briefly unavailable.
         res.status(500).json({ error: "Something went wrong" });
     }
 });
