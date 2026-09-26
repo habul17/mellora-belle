@@ -5,6 +5,7 @@ import { loadRazorpay } from "../lib/razorpay"
 
 type Order = {
     id: string;
+    number: number;
     totalAmount: number;
     status: string;
     reservedUntil: string;
@@ -179,8 +180,11 @@ function Checkout() {
                     </>
                 )}
 
-                <p>Order id: {order.id}</p>
-                <p><Link to="/">Continue shopping</Link></p>
+                <p>Order #{order.number}</p>
+                <p>
+                    <Link to={`/orders/${order.id}`}>View your order</Link> ·{" "}
+                    <Link to="/">Continue shopping</Link>
+                </p>
             </div>
         );
     }
@@ -189,7 +193,7 @@ function Checkout() {
         return (
             <div>
                 <h1>Review and pay</h1>
-                <p>Order id: {order.id}</p>
+                <p>Order #{order.number}</p>
                 <p>Status: {order.status}</p>
                 <p>Total: Rs {order.totalAmount}</p>
                 <p>
