@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Link } from "react-router-dom"
 import { authFetch } from "../lib/api"
 
 function AdminStock() {
@@ -53,6 +54,8 @@ function AdminStock() {
     );
 
     return (
+        <main>
+        <p><strong>Stock</strong> · <Link to="/admin/orders">Orders</Link></p>
         <table>
             <thead>
                 <tr>
@@ -84,6 +87,7 @@ function AdminStock() {
                 ))}
             </tbody>
         </table>
+        </main>
     );
 }
 
