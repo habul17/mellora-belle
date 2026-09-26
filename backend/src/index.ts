@@ -13,6 +13,9 @@ import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/release
 import { isServiceablePincode } from "./lib/shipping.js"
 import { getRazorpay, toPaise } from "./lib/razorpay.js"
 import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
+import { sendQueuedOrderEmails } from "./lib/orderEmails.js"
+import { orderViewInclude, adminOrderViewInclude, toOrderView, toAdminOrderView } from "./lib/orderView.js"
+import { statusBefore } from "./lib/orderStatus.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 
@@ -126,11 +129,17 @@ app.post("/forgot-password", async (req, res) => {
 
         const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
 
-        await sendEmail(
-            user.email,
-            "Reset your Mellora Belle password",
-            `<p>Click the link below to reset your password. This link expires in 15 minutes.</p><a href="${resetLink}">${resetLink}</a>`
-        );
+        try {
+            await sendEmail(
+                user.email,
+                "Reset your Mellora Belle password",
+                `<p>Click the link below to reset your password. This link expires in 15 minutes.</p><a href="${resetLink}">${resetLink}</a>`
+            );
+        } catch (err) {
+            // Logged, but answered exactly like success. An error only for
+            // emails that have an account would tell anyone which emails do.
+            console.log("Password reset email failed", err);
+        }
 
         res.json({ message: "If that email exists, a reset link has been sent" })
 
@@ -647,6 +656,168 @@ app.post("/orders/:id/confirm-payment", requireAuth, async (req, res) => {
     }
 });
 
+// A customer's order history. Only orders that were actually paid: abandoned
+// checkouts that expired unpaid are not orders the customer thinks they placed.
+app.get("/orders", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+
+    try {
+        const orders = await prisma.order.findMany({
+            where: { userId, payment: { status: "PAID" } },
+            include: orderViewInclude,
+            orderBy: { createdAt: "desc" }
+        });
+
+        res.json({ orders: orders.map(toOrderView) });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+app.get("/orders/:id", requireAuth, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const order = await prisma.order.findUnique({ where: { id }, include: orderViewInclude });
+
+        // Someone else's order answers exactly like a missing one, so order
+        // ids can't be probed to find out which exist.
+        if (!order || order.userId !== userId) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        res.json({ order: toOrderView(order) });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+const ADMIN_ORDER_LIMIT = 200;
+
+// Every paid order, newest first, including cancelled-but-paid ones that need
+// a refund. The admin page filters this list itself.
+app.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const orders = await prisma.order.findMany({
+            where: { payment: { status: "PAID" } },
+            include: adminOrderViewInclude,
+            orderBy: { createdAt: "desc" },
+            take: ADMIN_ORDER_LIMIT
+        });
+
+        res.json({ orders: orders.map(toAdminOrderView) });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+const TRACKING_FIELD_MAX = 100;
+
+// Moves an order one step along PAID -> PACKED -> SHIPPED -> DELIVERED.
+app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+    const { status } = req.body;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const from = statusBefore(status);
+
+    if (!from) {
+        return res.status(400).json({ error: "An order can't be moved to that status by hand" });
+    }
+
+    let tracking = {};
+
+    if (status === "SHIPPED") {
+        const courierName = String(req.body.courierName ?? "").trim();
+        const trackingNumber = String(req.body.trackingNumber ?? "").trim();
+        const trackingUrlInput = String(req.body.trackingUrl ?? "").trim();
+
+        if (!courierName || !trackingNumber) {
+            return res.status(400).json({ error: "Enter the courier name and tracking number" });
+        }
+
+        if (courierName.length > TRACKING_FIELD_MAX || trackingNumber.length > TRACKING_FIELD_MAX) {
+            return res.status(400).json({ error: "Courier name and tracking number must be under 100 characters" });
+        }
+
+        let trackingUrl: string | null = null;
+
+        if (trackingUrlInput) {
+            // The link goes into the customer's email and order page. Only a
+            // real web address is allowed: "javascript:..." would run code
+            // when clicked.
+            let parsed: URL | null = null;
+            try { parsed = new URL(trackingUrlInput); } catch { }
+
+            if (!parsed || (parsed.protocol !== "https:" && parsed.protocol !== "http:")) {
+                return res.status(400).json({ error: "The tracking link must be a web address starting with https://" });
+            }
+
+            trackingUrl = parsed.toString();
+        }
+
+        tracking = { courierName, trackingNumber, trackingUrl, shippedAt: new Date() };
+    }
+
+    try {
+        const moved = await prisma.$transaction(async (tx) => {
+            // Conditional on the current status, so a double-click, or two tabs
+            // open on the same order, moves it one step and not two.
+            const result = await tx.order.updateMany({
+                where: { id, status: from },
+                data: {
+                    status,
+                    ...tracking,
+                    ...(status === "DELIVERED" && { deliveredAt: new Date() })
+                }
+            });
+
+            if (result.count === 0) return false;
+
+            if (status === "SHIPPED") {
+                await tx.orderEmail.createMany({
+                    data: [{ orderId: id, kind: "ORDER_SHIPPED" }],
+                    skipDuplicates: true
+                });
+            }
+
+            return true;
+        });
+
+        if (!moved) {
+            const current = await prisma.order.findUnique({ where: { id }, select: { status: true } });
+
+            if (!current) return res.status(404).json({ error: "Order not found" });
+
+            return res.status(409).json({
+                error: `This order is ${current.status.toLowerCase()} now. Refresh to see its latest state.`
+            });
+        }
+
+        if (status === "SHIPPED") {
+            sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+        }
+
+        const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: adminOrderViewInclude });
+
+        res.json({ order: toAdminOrderView(order) });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
 app.post("/webhooks/razorpay", async (req, res) => {
     const signature = req.headers["x-razorpay-signature"];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -733,6 +904,8 @@ app.get("/health", (req, res) => {
 
 setInterval(() => {
     releaseExpiredReservations().catch((err) => console.log("Reservation cleanup failed", err));
+    // Retries any order email whose first send failed.
+    sendQueuedOrderEmails().catch((err) => console.log("Sending queued emails failed", err));
 }, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
 
 app.listen(process.env.PORT || 4000, () => {
