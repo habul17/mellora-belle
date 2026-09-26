@@ -12,7 +12,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum Size {
   S
   M
@@ -44,14 +43,14 @@ model Product {
 }
 
 model Variant {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   size          Size
   color         String
-  sku           String   @unique
+  sku           String      @unique
   stockQuantity Int
   priceOverride Int?
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
   cartItems     CartItem[]
   orderItems    OrderItem[]
 }
@@ -62,11 +61,11 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String               @id @default(cuid())
+  email        String               @unique
   passwordHash String
-  role         Role     @default(CUSTOMER)
-  createdAt    DateTime @default(now())
+  role         Role                 @default(CUSTOMER)
+  createdAt    DateTime             @default(now())
   resetTokens  PasswordResetToken[]
   totpSecret   String?
   cart         Cart?
@@ -100,31 +99,70 @@ model CartItem {
   @@unique([cartId, variantId])
 }
 
+// PENDING -> PAID -> PACKED -> SHIPPED -> DELIVERED, or PENDING -> CANCELLED.
+// Only the payment code moves an order to PAID; the admin moves it on from there.
 enum OrderStatus {
   PENDING
   PAID
+  PACKED
+  SHIPPED
+  DELIVERED
   CANCELLED
 }
 
 model Order {
-  id            String      @id @default(cuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  status        OrderStatus @default(PENDING)
-  totalAmount   Int
+  id          String      @id @default(cuid())
+  // What the customer sees and reads out on the phone: "order #1004".
+  number      Int         @unique @default(autoincrement())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  status      OrderStatus @default(PENDING)
+  totalAmount Int
 
-  fullName      String
-  phone         String
-  addressLine1  String
-  addressLine2  String?
-  city          String
-  state         String
-  pincode       String
+  fullName     String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  pincode      String
+
+  // Filled in by the admin when the parcel is handed to the courier.
+  courierName    String?
+  trackingNumber String?
+  trackingUrl    String?
 
   reservedUntil DateTime
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime     @default(now())
+  paidAt        DateTime?
+  shippedAt     DateTime?
+  deliveredAt   DateTime?
   items         OrderItem[]
   payment       Payment?
+  emails        OrderEmail[]
+}
+
+enum OrderEmailKind {
+  ORDER_CONFIRMED
+  ORDER_SHIPPED
+}
+
+// An outbox: a row is written in the same transaction that changes the order,
+// then sent afterwards. If sending fails, the row stays and is retried, so an
+// order can never reach PAID or SHIPPED without its email being owed.
+model OrderEmail {
+  id            String         @id @default(cuid())
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id])
+  kind          OrderEmailKind
+  attempts      Int            @default(0) // failed sends so far
+  nextAttemptAt DateTime       @default(now())
+  lastError     String?
+  sentAt        DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@unique([orderId, kind])
+  @@index([sentAt, nextAttemptAt])
 }
 
 model OrderItem {
