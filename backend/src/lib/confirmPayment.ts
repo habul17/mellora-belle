@@ -1,6 +1,7 @@
 import { Prisma } from "../generated/prisma/client.js"
 import { prisma } from "./prisma.js"
 import { getRazorpay } from "./razorpay.js"
+import { sendQueuedOrderEmails } from "./orderEmails.js"
 
 export type MarkPaidResult = "paid" | "already-paid" | "refund-needed";
 
@@ -43,7 +44,7 @@ export async function markOrderPaid(
     razorpayPaymentId: string,
     rawWebhookPayload?: Prisma.InputJsonValue
 ): Promise<MarkPaidResult> {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx): Promise<MarkPaidResult> => {
         const claimed = await tx.payment.updateMany({
             where: { id: paymentId, status: { not: "PAID" } },
             data: {
@@ -66,7 +67,7 @@ export async function markOrderPaid(
         // re-check, instead of both acting on a status that is already stale.
         const movedFromPending = await tx.order.updateMany({
             where: { id: order.id, status: "PENDING" },
-            data: { status: "PAID" }
+            data: { status: "PAID", paidAt: new Date() }
         });
 
         if (movedFromPending.count === 0) {
@@ -84,7 +85,7 @@ export async function markOrderPaid(
 
             await tx.order.update({
                 where: { id: order.id },
-                data: { status: "PAID" }
+                data: { status: "PAID", paidAt: new Date() }
             });
         }
 
@@ -97,8 +98,24 @@ export async function markOrderPaid(
             }
         });
 
+        // Owed in the same transaction as the PAID status itself, so a paid
+        // order can never exist without its confirmation email queued.
+        await tx.orderEmail.createMany({
+            data: [{ orderId: order.id, kind: "ORDER_CONFIRMED" }],
+            skipDuplicates: true
+        });
+
         return "paid";
     });
+
+    if (result === "paid") {
+        // Sent after the commit and not awaited: the payment is already safe,
+        // and a slow or failing email provider must not delay the webhook's
+        // answer to Razorpay. A failed send is retried by the regular sweep.
+        sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+    }
+
+    return result;
 }
 
 // Asks Razorpay directly whether an order has been paid, for when the webhook
