@@ -1,10 +1,11 @@
 import { prisma } from "./prisma.js"
 import { sendEmail } from "./email.js"
 import { store } from "./store.js"
+import type { OrderEmailKind } from "../generated/prisma/enums.js"
 
 // Every order email is a row in OrderEmail, written in the same transaction
-// that moved the order to PAID or SHIPPED. This file sends the rows that are
-// still owed. A failed send is retried with growing gaps (2, 4, 8 ... 128
+// that changed the order (paid, shipped, a cancellation or return request,
+// a refund). This file sends the rows that are still owed. A failed send is retried with growing gaps (2, 4, 8 ... 128
 // minutes) and given up after MAX_ATTEMPTS, about four hours in total.
 const MAX_ATTEMPTS = 8;
 
@@ -39,8 +40,18 @@ function rupees(amount: number) {
     return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+function siteUrl() {
+    return process.env.FRONTEND_URL || "http://localhost:5173";
+}
+
 function orderLink(order: EmailOrder) {
-    return `${process.env.FRONTEND_URL || "http://localhost:5173"}/orders/${order.id}`;
+    return `${siteUrl()}/orders/${order.id}`;
+}
+
+function itemsList(order: EmailOrder) {
+    return order.items
+        .map((item) => `${escapeHtml(item.variant.product.name)} (${item.variant.size}) × ${item.quantity}`)
+        .join("<br>");
 }
 
 function itemsTable(order: EmailOrder) {
@@ -54,8 +65,16 @@ function itemsTable(order: EmailOrder) {
         <table style="border-collapse:collapse">
             ${rows}
             <tr>
-                <td style="padding:8px 12px 4px 0"><strong>Total paid</strong></td>
-                <td style="padding:8px 0 4px;text-align:right"><strong>${rupees(order.totalAmount)}</strong></td>
+                <td style="padding:8px 12px 4px 0">Subtotal</td>
+                <td style="padding:8px 0 4px;text-align:right">${rupees(order.subtotal)}</td>
+            </tr>
+            <tr>
+                <td style="padding:4px 12px 4px 0">Shipping</td>
+                <td style="padding:4px 0;text-align:right">${order.shippingCost ? rupees(order.shippingCost) : "Free"}</td>
+            </tr>
+            <tr>
+                <td style="padding:4px 12px 4px 0"><strong>Total paid</strong></td>
+                <td style="padding:4px 0;text-align:right"><strong>${rupees(order.totalAmount)}</strong></td>
             </tr>
         </table>`;
 }
@@ -117,6 +136,86 @@ export function orderShippedEmail(order: EmailOrder) {
     };
 }
 
+// To the shop's own inbox: a customer is waiting for the owner to act.
+function requestForShopEmail(order: EmailOrder, what: "cancel" | "return") {
+    const heading = what === "cancel" ? "Cancellation requested" : "Return requested";
+
+    return {
+        subject: `${heading}: order #${order.number}`,
+        html: `
+            <p><strong>${heading}</strong> for order #${order.number} (₹${order.totalAmount}).</p>
+            <p>Reason: ${escapeHtml(order.requestReason ?? "none given")}</p>
+            <p>${itemsList(order)}</p>
+            <p>
+                Customer: ${escapeHtml(order.fullName)}<br>
+                Email: ${escapeHtml(order.user.email)}<br>
+                Phone: ${escapeHtml(order.phone)}
+            </p>
+            <p><a href="${siteUrl()}/admin/orders">Open the orders page</a> to approve or decline it.</p>`
+    };
+}
+
+export function orderCancelledEmail(order: EmailOrder) {
+    return {
+        subject: `Order #${order.number} cancelled – ${store.name}`,
+        html: `
+            <p>Hi ${escapeHtml(order.fullName)},</p>
+            <p>Your order #${order.number} has been cancelled. We'll refund the full
+            ${rupees(order.totalAmount)} to your original payment method within ${store.refundDays},
+            and email you once it's on its way.</p>
+            <p>${itemsList(order)}</p>
+            <p><a href="${orderLink(order)}">View your order</a></p>
+            ${footer()}`
+    };
+}
+
+function requestDeclinedEmail(order: EmailOrder, what: "cancel" | "return") {
+    const asked = what === "cancel" ? "cancel" : "return";
+
+    return {
+        subject: `About your request for order #${order.number} – ${store.name}`,
+        html: `
+            <p>Hi ${escapeHtml(order.fullName)},</p>
+            <p>You asked to ${asked} order #${order.number}. We're sorry, but we can't do that
+            this time:</p>
+            <p style="border-left:3px solid #ccc;padding-left:12px">${escapeHtml(order.requestDeclineNote ?? "")}</p>
+            <p><a href="${orderLink(order)}">View your order</a></p>
+            ${footer()}`
+    };
+}
+
+export function refundIssuedEmail(order: EmailOrder) {
+    const reference = order.refundReference
+        ? `<p>Refund reference: ${escapeHtml(order.refundReference)}</p>`
+        : "";
+
+    return {
+        subject: `Refund for order #${order.number} – ${store.name}`,
+        html: `
+            <p>Hi ${escapeHtml(order.fullName)},</p>
+            <p>We've refunded ${rupees(order.refundAmount ?? order.totalAmount)} for order
+            #${order.number} to your original payment method. Banks usually take
+            ${store.refundDays} to show it in your account.</p>
+            ${reference}
+            <p><a href="${orderLink(order)}">View your order</a></p>
+            ${footer()}`
+    };
+}
+
+// Who each kind of email goes to, and what it says.
+function buildEmail(kind: OrderEmailKind, order: EmailOrder) {
+    switch (kind) {
+        case "ORDER_CONFIRMED": return { to: order.user.email, ...orderConfirmedEmail(order) };
+        case "ORDER_SHIPPED": return { to: order.user.email, ...orderShippedEmail(order) };
+        case "CANCELLATION_REQUESTED": return { to: store.email, ...requestForShopEmail(order, "cancel") };
+        case "RETURN_REQUESTED": return { to: store.email, ...requestForShopEmail(order, "return") };
+        case "ORDER_CANCELLED": return { to: order.user.email, ...orderCancelledEmail(order) };
+        case "CANCELLATION_DECLINED": return { to: order.user.email, ...requestDeclinedEmail(order, "cancel") };
+        case "RETURN_DECLINED": return { to: order.user.email, ...requestDeclinedEmail(order, "return") };
+        case "REFUND_ISSUED": return { to: order.user.email, ...refundIssuedEmail(order) };
+    }
+}
+
 async function sendOne(emailId: string) {
     // Claim it: only the sweep whose update succeeds sends it. Postgres makes a
     // second, simultaneous claim wait and then re-check nextAttemptAt, which by
@@ -132,14 +231,12 @@ async function sendOne(emailId: string) {
     const order = await loadOrder(email.orderId);
 
     try {
-        const { subject, html } = email.kind === "ORDER_CONFIRMED"
-            ? orderConfirmedEmail(order)
-            : orderShippedEmail(order);
+        const { to, subject, html } = buildEmail(email.kind, order);
 
         // Same key for a retry of the same attempt. If the email went out but
         // saving sentAt failed, Resend recognises the retry and doesn't send
         // it twice. A genuine failure bumps attempts, so the next try is new.
-        await sendEmail(order.user.email, subject, html, `order-email/${email.id}/${email.attempts}`);
+        await sendEmail(to, subject, html, `order-email/${email.id}/${email.attempts}`);
 
         await prisma.orderEmail.update({
             where: { id: email.id },

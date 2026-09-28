@@ -9,12 +9,13 @@ import { requireAuth } from "./middleware/requireAuth.js"
 import { requireAdmin } from "./middleware/requireAdmin.js"
 import { sendEmail } from "./lib/email.js"
 import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/releaseExpiredReservations.js"
-import { isServiceablePincode } from "./lib/shipping.js"
+import { isServiceablePincode, shippingCost, shippingZone, totalWeight } from "./lib/shipping.js"
 import { getRazorpay, toPaise } from "./lib/razorpay.js"
 import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
 import { sendQueuedOrderEmails } from "./lib/orderEmails.js"
 import { orderViewInclude, adminOrderViewInclude, toOrderView, toAdminOrderView } from "./lib/orderView.js"
-import { statusBefore } from "./lib/orderStatus.js"
+import { statusBefore, describeStatus } from "./lib/orderStatus.js"
+import { OrderRequestError, requestCancellation, requestReturn, cancelOrder, declineRequest, markReturned, markRefunded } from "./lib/orderRequests.js"
 import { normalizeEmail, isValidEmail, passwordProblem, findUserByEmail, startSession, refreshSession, endSession } from "./lib/auth.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
@@ -543,15 +544,24 @@ app.post("/checkout", requireAuth, async (req, res) => {
                 status: "PENDING",
                 reservedUntil: { gt: new Date() }
             },
-            include: { items: true }
+            include: { items: { include: { variant: { include: { product: true } } } } }
         });
 
         if (existingOrder) {
-            if (cartItems.length > 0 && !sameContents(existingOrder.items, cartItems)) {
-                // The cart changed after checkout started, so the reservation
-                // no longer matches what the customer expects to buy. Give the
-                // stale stock back and build a fresh order below.
+            const contentsChanged = cartItems.length > 0 && !sameContents(existingOrder.items, cartItems);
+            // A new address can land in another shipping zone. If the payment
+            // window was already opened, its Razorpay order is for the old
+            // total, so the order is rebuilt rather than edited.
+            const shippingChanged =
+                shippingCost(totalWeight(existingOrder.items), String(pincode)) !== existingOrder.shippingCost;
+
+            if (contentsChanged || (shippingChanged && cartItems.length > 0)) {
+                // The cart or the shipping changed after checkout started, so
+                // the reservation no longer matches what the customer expects
+                // to pay for. Give the stale stock back and build a fresh order below.
                 await cancelAndReleaseStock(existingOrder);
+            } else if (shippingChanged) {
+                return res.status(400).json({ error: "Your cart is empty" });
             } else {
                 const updatedOrder = await prisma.order.update({
                     where: { id: existingOrder.id },
@@ -564,7 +574,6 @@ app.post("/checkout", requireAuth, async (req, res) => {
                         state,
                         pincode: String(pincode)
                     },
-                    include: { items: true }
                 });
 
                 return res.json({ order: updatedOrder });
@@ -577,7 +586,7 @@ app.post("/checkout", requireAuth, async (req, res) => {
 
         const order = await prisma.$transaction(async (tx) => {
             const orderItems: { variantId: string; quantity: number; price: number }[] = [];
-            let totalAmount = 0;
+            let subtotal = 0;
 
             for (const item of cartItems) {
                 const reserved = await tx.variant.updateMany({
@@ -590,15 +599,19 @@ app.post("/checkout", requireAuth, async (req, res) => {
                 }
 
                 const price = item.variant.priceOverride ?? item.variant.product.basePrice;
-                totalAmount += price * item.quantity;
+                subtotal += price * item.quantity;
 
                 orderItems.push({ variantId: item.variantId, quantity: item.quantity, price });
             }
 
+            const shipping = shippingCost(totalWeight(cartItems), String(pincode));
+
             return tx.order.create({
                 data: {
                     userId,
-                    totalAmount,
+                    subtotal,
+                    shippingCost: shipping,
+                    totalAmount: subtotal + shipping,
                     fullName,
                     phone: String(phone),
                     addressLine1,
@@ -608,8 +621,7 @@ app.post("/checkout", requireAuth, async (req, res) => {
                     pincode: String(pincode),
                     reservedUntil: new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000),
                     items: { create: orderItems }
-                },
-                include: { items: true }
+                }
             });
         });
 
@@ -886,7 +898,7 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
             if (!current) return res.status(404).json({ error: "Order not found" });
 
             return res.status(409).json({
-                error: `This order is ${current.status.toLowerCase()} now. Refresh to see its latest state.`
+                error: `This order is ${describeStatus(current.status)} now. Refresh to see its latest state.`
             });
         }
 
@@ -903,6 +915,56 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
         res.status(500).json({ error: "Something went wrong" });
     }
 });
+
+// Runs one cancellation / return / refund change and answers with the order
+// as it now stands, or with the reason it couldn't be done.
+async function orderRequestRoute(
+    req: express.Request,
+    res: express.Response,
+    change: (id: string) => Promise<void>,
+    admin: boolean
+) {
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        await change(id);
+
+        if (admin) {
+            const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: adminOrderViewInclude });
+            return res.json({ order: toAdminOrderView(order) });
+        }
+
+        const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: orderViewInclude });
+        res.json({ order: toOrderView(order) });
+
+    } catch (err) {
+        if (err instanceof OrderRequestError) {
+            return res.status(err.httpStatus).json({ error: err.message });
+        }
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+}
+
+app.post("/orders/:id/cancel", requireAuth, (req, res) =>
+    orderRequestRoute(req, res, (id) => requestCancellation(id, (req as any).user.userId, req.body.reason), false));
+
+app.post("/orders/:id/return", requireAuth, (req, res) =>
+    orderRequestRoute(req, res, (id) => requestReturn(id, (req as any).user.userId, req.body.reason, req.body.details), false));
+
+app.post("/admin/orders/:id/cancel", requireAuth, requireAdmin, (req, res) =>
+    orderRequestRoute(req, res, (id) => cancelOrder(id), true));
+
+app.post("/admin/orders/:id/decline", requireAuth, requireAdmin, (req, res) =>
+    orderRequestRoute(req, res, (id) => declineRequest(id, req.body.note), true));
+
+app.post("/admin/orders/:id/returned", requireAuth, requireAdmin, (req, res) =>
+    orderRequestRoute(req, res, (id) => markReturned(id), true));
+
+app.post("/admin/orders/:id/refund", requireAuth, requireAdmin, (req, res) =>
+    orderRequestRoute(req, res, (id) => markRefunded(id, req.body.amount, req.body.reference), true));
 
 app.post("/webhooks/razorpay", async (req, res) => {
     const signature = req.headers["x-razorpay-signature"];

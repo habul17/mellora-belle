@@ -1,4 +1,5 @@
 import type { Prisma } from "../generated/prisma/client.js"
+import { cancelDeadline, returnDeadline } from "./orderStatus.js"
 
 // What an order looks like when it leaves the server. Built field by field so
 // nothing is sent by accident (the raw Razorpay payload, other users' data).
@@ -21,9 +22,13 @@ export function toOrderView(order: ViewableOrder) {
         id: order.id,
         number: order.number,
         status: order.status,
-        // Money arrived, but the order was cancelled because its items sold
-        // out first (see markOrderPaid). The customer is owed a refund.
-        refundNeeded: order.status === "CANCELLED" && order.payment?.status === "PAID",
+        // Money arrived but the order was cancelled (sold out first, see
+        // markOrderPaid, or cancelled on request) or returned, and the refund
+        // hasn't been recorded yet.
+        refundNeeded: !order.refundedAt &&
+            ((order.status === "CANCELLED" && order.payment?.status === "PAID") || order.status === "RETURNED"),
+        subtotal: order.subtotal,
+        shippingCost: order.shippingCost,
         totalAmount: order.totalAmount,
         createdAt: order.createdAt,
         paidAt: order.paidAt,
@@ -32,6 +37,18 @@ export function toOrderView(order: ViewableOrder) {
         courierName: order.courierName,
         trackingNumber: order.trackingNumber,
         trackingUrl: order.trackingUrl,
+        // When the Cancel / Return buttons stop working, or null to hide them.
+        cancelUntil: cancelDeadline(order),
+        returnUntil: returnDeadline(order),
+        cancelRequestedAt: order.cancelRequestedAt,
+        returnRequestedAt: order.returnRequestedAt,
+        requestReason: order.requestReason,
+        requestDeclineNote: order.requestDeclineNote,
+        cancelledAt: order.cancelledAt,
+        returnedAt: order.returnedAt,
+        refundedAt: order.refundedAt,
+        refundAmount: order.refundAmount,
+        refundReference: order.refundReference,
         address: {
             fullName: order.fullName,
             phone: order.phone,

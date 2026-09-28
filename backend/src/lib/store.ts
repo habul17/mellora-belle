@@ -7,4 +7,5 @@ export const store = {
     phone: "+91 99444 24576",
     dispatchDays: "1-2 working days",
     deliveryDays: "3-7 working days",
+    refundDays: "5-7 working days",
 };
