@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Self-hosted, so no visitor's browser has to ask Google for them. */
+@import "@fontsource-variable/jost/wght.css";
+@import "@fontsource/cormorant-garamond/latin-500.css";
+@import "@fontsource/cormorant-garamond/latin-600.css";
+@import "@fontsource/cormorant-garamond/latin-500-italic.css";
+
+/* The brand in one place: warm ivory and stone from the photo shoots, ink for
+   text, and the plum of the Midnight Bloom print as the one accent colour. */
+@theme {
+    --font-sans: "Jost Variable", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Cormorant Garamond", ui-serif, Georgia, serif;
+
+    --color-ivory: #faf7f2;
+    --color-sand: #f2ece3;
+    --color-stone: #e4dcd1;
+    --color-ink: #1d1a1b;
+    --color-muted: #6e6468;
+    --color-plum: #5a2848;
+    --color-plum-dark: #43193a;
+    --color-plum-soft: #f4ebf0;
+    --color-olive: #4f5d2a;
+    --color-olive-soft: #eef1e4;
+    --color-rust: #a3372b;
+    --color-rust-soft: #fbecea;
+}
+
+@layer base {
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-ivory font-sans text-ink antialiased;
+    }
+
+    h1, h2, h3 {
+        @apply font-serif font-medium;
+        /* Cormorant's default old-style numbers make "Order #1004" hard to read. */
+        font-variant-numeric: lining-nums;
+    }
+
+    ::selection {
+        @apply bg-plum text-ivory;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-plum;
+    }
+}
+
+/* The two admin pages are a tool for one person, so they stay plain: this only
+   puts back the browser look that Tailwind's reset takes away. */
+@layer components {
+    .admin {
+        @apply mx-auto max-w-5xl px-4 py-6 font-sans text-sm leading-relaxed;
+    }
+    .admin h1 { @apply mb-4 font-sans text-2xl font-semibold; }
+    .admin h2 { @apply mt-4 mb-2 font-sans text-lg font-semibold; }
+    .admin p { @apply my-2; }
+    .admin ul { @apply my-2 list-disc pl-6; }
+    .admin a { @apply text-plum underline; }
+    .admin input, .admin select, .admin textarea {
+        @apply mr-2 mb-1 border border-stone bg-white px-2 py-1;
+    }
+    .admin button {
+        @apply mr-2 mb-1 border border-ink bg-white px-3 py-1 hover:bg-sand disabled:cursor-default disabled:border-stone disabled:bg-sand disabled:text-muted;
+    }
+    .admin table { @apply my-2 border-collapse; }
+    .admin th, .admin td { @apply border border-stone px-2 py-1 text-left; }
+}
