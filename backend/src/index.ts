@@ -2,7 +2,6 @@ import express from "express"
 import dotenv from "dotenv"
 import cors from "cors"
 import bcrypt from "bcrypt"
-import jwt from "jsonwebtoken"
 import crypto from "node:crypto"
 import { prisma } from "./lib/prisma.js"
 import { Prisma } from "./generated/prisma/client.js"
@@ -16,6 +15,7 @@ import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
 import { sendQueuedOrderEmails } from "./lib/orderEmails.js"
 import { orderViewInclude, adminOrderViewInclude, toOrderView, toAdminOrderView } from "./lib/orderView.js"
 import { statusBefore } from "./lib/orderStatus.js"
+import { normalizeEmail, isValidEmail, passwordProblem, findUserByEmail, startSession, refreshSession, endSession } from "./lib/auth.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 
@@ -32,13 +32,28 @@ app.use(express.json({
     }
 }));
 
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
+// credentials: the browser may send and receive the refresh cookie, but only
+// for FRONTEND_URL.
+app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }))
+
+// The refresh cookie goes along with any request to /auth, even one another
+// site triggers. A custom header can't be added cross-site without a CORS
+// preflight, which only FRONTEND_URL passes, so requiring it keeps other
+// sites from using or ending a visitor's session.
+function fromOurSite(req: express.Request) {
+    return req.get("x-requested-with") === "mellora-belle";
+}
 
 app.post("/login", async (req, res) => {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
+
+    if (!email || typeof password !== "string") {
+        return res.status(400).json({ error: "Enter your email and password" });
+    }
 
     try {
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await findUserByEmail(email);
 
         if (!user) {
             return res.status(401).json({ error: "Invalid email or password" })
@@ -73,11 +88,7 @@ app.post("/login", async (req, res) => {
 
 
 
-        const accessToken = jwt.sign(
-            { userId: user.id, role: user.role },
-            process.env.JWT_SECRET!,
-            { expiresIn: "15m" }
-        );
+        const accessToken = await startSession(res, user);
         res.json({ accessToken });
     } catch (err) {
         console.log(err);
@@ -86,16 +97,33 @@ app.post("/login", async (req, res) => {
 })
 
 app.post("/signup", async (req, res) => {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
+
+    if (!isValidEmail(email)) {
+        return res.status(400).json({ error: "Enter a valid email address" });
+    }
+    const problem = passwordProblem(password);
+    if (problem) {
+        return res.status(400).json({ error: problem });
+    }
 
     try {
+        // Accounts made before emails were lowercased could differ only in
+        // case, which the unique index wouldn't catch.
+        if (await findUserByEmail(email)) {
+            return res.status(409).json({ error: "An account with this email already exists" })
+        }
+
         const passwordHash = await bcrypt.hash(password, 10);
 
         const user = await prisma.user.create({
             data: { email, passwordHash },
         });
 
-        res.json({ id: user.id, email: user.email, role: user.role });
+        // Logged in straight away, so a new customer carries on to checkout.
+        const accessToken = await startSession(res, user);
+        res.json({ accessToken });
     } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             return res.status(409).json({ error: "An account with this email already exists" })
@@ -107,10 +135,10 @@ app.post("/signup", async (req, res) => {
 })
 
 app.post("/forgot-password", async (req, res) => {
-    const email = req.body.email;
+    const email = normalizeEmail(req.body.email);
 
     try {
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = email ? await findUserByEmail(email) : null;
 
         if (!user) {
             return res.json({ message: "If that email exists, a reset link has been sent" });
@@ -149,6 +177,40 @@ app.post("/forgot-password", async (req, res) => {
     }
 })
 
+// Trades the httpOnly refresh cookie for a fresh access token, so a customer
+// isn't logged out every 15 minutes.
+app.post("/auth/refresh", async (req, res) => {
+    if (!fromOurSite(req)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+    res.set("Cache-Control", "no-store");
+
+    try {
+        const accessToken = await refreshSession(req, res);
+        if (!accessToken) {
+            return res.status(401).json({ error: "Please log in again" });
+        }
+        res.json({ accessToken });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+})
+
+app.post("/auth/logout", async (req, res) => {
+    if (!fromOurSite(req)) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+
+    try {
+        await endSession(req, res);
+        res.json({ message: "Logged out" });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+})
+
 app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
     const secret = authenticator.generateSecret();
     const userId = (req as any).user.userId;
@@ -176,6 +238,14 @@ app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
 app.post("/reset-password", async (req, res) => {
     const { token, newPassword } = req.body;
 
+    if (typeof token !== "string" || !token) {
+        return res.status(400).json({ error: "Invalid or expired token" });
+    }
+    const problem = passwordProblem(newPassword);
+    if (problem) {
+        return res.status(400).json({ error: problem });
+    }
+
     try {
         const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
@@ -193,14 +263,30 @@ app.post("/reset-password", async (req, res) => {
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
-        await prisma.user.update({
-            where: { id: resetToken.userId },
-            data: { passwordHash }
+        const reset = await prisma.$transaction(async (tx) => {
+            // Claiming the token by deleting it means two clicks on the same
+            // link can't both change the password.
+            const claimed = await tx.passwordResetToken.deleteMany({ where: { id: resetToken.id } });
+            if (claimed.count === 0) return false;
+
+            await tx.user.update({
+                where: { id: resetToken.userId },
+                data: { passwordHash }
+            });
+
+            // Any other reset links sent earlier are now useless, and anyone
+            // logged in with the old password is logged out everywhere.
+            await tx.passwordResetToken.deleteMany({ where: { userId: resetToken.userId } });
+            await tx.refreshToken.updateMany({
+                where: { userId: resetToken.userId, revokedAt: null },
+                data: { revokedAt: new Date() },
+            });
+            return true;
         });
 
-        await prisma.passwordResetToken.delete({
-            where: { id: resetToken.id }
-        });
+        if (!reset) {
+            return res.status(400).json({ error: "Invalid or expired token" });
+        }
 
         res.json({ message: "Password reset Successful " })
 

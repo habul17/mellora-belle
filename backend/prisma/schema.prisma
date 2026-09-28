@@ -61,15 +61,33 @@ enum Role {
 }
 
 model User {
-  id           String               @id @default(cuid())
-  email        String               @unique
-  passwordHash String
-  role         Role                 @default(CUSTOMER)
-  createdAt    DateTime             @default(now())
-  resetTokens  PasswordResetToken[]
-  totpSecret   String?
-  cart         Cart?
-  orders       Order[]
+  id            String               @id @default(cuid())
+  email         String               @unique
+  passwordHash  String
+  role          Role                 @default(CUSTOMER)
+  createdAt     DateTime             @default(now())
+  resetTokens   PasswordResetToken[]
+  refreshTokens RefreshToken[]
+  totpSecret    String?
+  cart          Cart?
+  orders        Order[]
+}
+
+// A long-lived login, kept in an httpOnly cookie the page's JavaScript can't
+// read. Only its hash is stored. Each use swaps it for a new one (rotation).
+// rotatedAt: replaced by a newer token (a second tab may still send it for a
+// few seconds). revokedAt: ended on purpose (log out, password reset, theft).
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  rotatedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model PasswordResetToken {
