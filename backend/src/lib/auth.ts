@@ -58,7 +58,7 @@ export function issueAccessToken(user: SessionUser) {
     return jwt.sign(
         { userId: user.id, role: user.role },
         process.env.JWT_SECRET!,
-        { expiresIn: "15m" }
+        { expiresIn: "15m", algorithm: "HS256" }
     );
 }
 
