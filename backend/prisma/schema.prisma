@@ -201,6 +201,43 @@ model Order {
   items           OrderItem[]
   payment         Payment?
   emails          OrderEmail[]
+  shipment        Shipment?
+}
+
+// The Shiprocket booking for an order, made when the admin marks it packed
+// (lib/shipments.ts). Shiprocket's ids are saved after each step, so a retry
+// carries on from the step that failed instead of booking twice.
+model Shipment {
+  id                   String         @id @default(cuid())
+  orderId              String         @unique
+  order                Order          @relation(fields: [orderId], references: [id])
+  status               ShipmentStatus @default(BOOKING)
+  // Goes up each time the order is booked again after a Shiprocket
+  // cancellation, because Shiprocket needs a new order id each time.
+  round                Int            @default(1)
+  shiprocketOrderId    String?
+  shiprocketShipmentId String?
+  awb                  String?        @unique
+  courierName          String?
+  pickupRequestedAt    DateTime?
+  pickupScheduledFor   DateTime?
+  labelUrl             String?
+  bookedAt             DateTime?
+  cancelledAt          DateTime?
+
+  // The retry queue, like OrderEmail.
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+
+  // The latest word from the courier, from the tracking webhook.
+  courierStatus   String?
+  courierStatusAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
 }
 
 enum OrderEmailKind {
@@ -244,6 +281,13 @@ model OrderItem {
   price     Int
 }
 
+enum ShipmentStatus {
+  BOOKING    // waiting for (or retrying) the Shiprocket booking
+  BOOKED     // label and pickup done; the courier takes it from here
+  FAILED     // gave up retrying; the admin retries or ships another way
+  CANCELLING // the order was cancelled; cancel the booking on Shiprocket
+  CANCELLED  // nothing (left) booked on Shiprocket
+}
 enum PaymentStatus {
   CREATED
   PAID

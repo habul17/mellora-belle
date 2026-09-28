@@ -36,3 +36,9 @@ export function shippingCost(weightGrams: number, pincode: string) {
 export function totalWeight(lines: { quantity: number; variant: { product: { weight: number } } }[]) {
     return lines.reduce((sum, line) => sum + line.variant.product.weight * line.quantity, 0);
 }
+
+// The box an order ships in, sent to Shiprocket with each booking. Couriers
+// charge for the larger of the real weight and the box's size (length ×
+// breadth × height / 5000 kg), so measure a packed parcel and put its real
+// size here.
+export const PARCEL_CM = { length: 30, breadth: 25, height: 5 };

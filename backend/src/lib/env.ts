@@ -10,6 +10,9 @@ const FEATURES: Record<string, string> = {
     RAZORPAY_KEY_SECRET: "payments",
     RAZORPAY_WEBHOOK_SECRET: "payment confirmation by webhook",
     RESEND_API_KEY: "emails",
+    SHIPROCKET_EMAIL: "Shiprocket booking (ship orders by hand until it's set)",
+    SHIPROCKET_PASSWORD: "Shiprocket booking (ship orders by hand until it's set)",
+    SHIPROCKET_WEBHOOK_TOKEN: "tracking updates from Shiprocket",
 };
 
 export function checkEnv() {

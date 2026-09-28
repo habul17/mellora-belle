@@ -11,7 +11,8 @@ export const orderViewInclude = {
 
 export const adminOrderViewInclude = {
     ...orderViewInclude,
-    user: { select: { email: true } }
+    user: { select: { email: true } },
+    shipment: true
 } as const;
 
 type ViewableOrder = Prisma.OrderGetPayload<{ include: typeof orderViewInclude }>;
@@ -75,6 +76,20 @@ export function toAdminOrderView(order: AdminViewableOrder) {
         ...toOrderView(order),
         customerEmail: order.user.email,
         // Needed to find the payment in the Razorpay dashboard for a refund.
-        razorpayPaymentId: order.payment?.razorpayPaymentId ?? null
+        razorpayPaymentId: order.payment?.razorpayPaymentId ?? null,
+        // The Shiprocket booking, if Shiprocket is switched on.
+        shipment: order.shipment && {
+            status: order.shipment.status,
+            awb: order.shipment.awb,
+            courierName: order.shipment.courierName,
+            labelUrl: order.shipment.labelUrl,
+            pickupRequestedAt: order.shipment.pickupRequestedAt,
+            pickupScheduledFor: order.shipment.pickupScheduledFor,
+            bookedAt: order.shipment.bookedAt,
+            attempts: order.shipment.attempts,
+            lastError: order.shipment.lastError,
+            courierStatus: order.shipment.courierStatus,
+            courierStatusAt: order.shipment.courierStatusAt
+        }
     };
 }

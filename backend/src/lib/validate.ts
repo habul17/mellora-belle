@@ -137,3 +137,13 @@ export const razorpayWebhookBody = z.object({
         }).optional(),
     }).optional(),
 });
+
+// ---- Shiprocket tracking webhook (read only after its token checks out) ----
+
+export const courierWebhookBody = z.object({
+    awb: z.union([z.string(), z.number()]).transform((value) => String(value).trim()).pipe(z.string().min(1).max(64)),
+    current_status: z.string().max(100).optional(),
+    shipment_status: z.string().max(100).optional(),
+    current_timestamp: z.string().max(40).optional(),
+    is_return: z.union([z.number(), z.boolean(), z.string()]).optional(),
+});

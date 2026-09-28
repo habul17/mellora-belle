@@ -2,6 +2,7 @@ import { prisma } from "./prisma.js"
 import { sendQueuedOrderEmails } from "./orderEmails.js"
 import { cancelDeadline, returnDeadline, describeStatus } from "./orderStatus.js"
 import type { OrderStatus } from "../generated/prisma/enums.js"
+import { stopBooking, processShipmentsSoon } from "./shipments.js"
 
 // Cancellations, returns and refunds. Refunds themselves are made by hand in
 // the Razorpay dashboard; this records them. Every change is conditional on
@@ -139,9 +140,13 @@ export async function cancelOrder(orderId: string) {
             data: [{ orderId: order.id, kind: "ORDER_CANCELLED" }],
             skipDuplicates: true,
         });
+
+        // A packed order may already be booked with Shiprocket.
+        await stopBooking(tx, order.id, "cancelled");
     });
 
     sendEmailsSoon();
+    processShipmentsSoon();
 }
 
 // Admin: say no to a request, with a reason the customer is emailed. The
