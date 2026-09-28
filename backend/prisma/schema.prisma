@@ -69,8 +69,29 @@ model User {
   resetTokens   PasswordResetToken[]
   refreshTokens RefreshToken[]
   totpSecret    String?
+  // A new authenticator being set up. It only replaces totpSecret once a
+  // code from it has been typed in, so a bad scan can't lock the admin out.
+  totpPendingSecret String?
   cart          Cart?
   orders        Order[]
+  auditLogs     AuditLog[]
+}
+
+// Who changed what in the admin, and when: stock counts, order steps,
+// cancellations, refunds, 2FA. Written after each change succeeds; nothing
+// reads it back in the app, it's there to answer "what happened?" later.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 // A long-lived login, kept in an httpOnly cookie the page's JavaScript can't
