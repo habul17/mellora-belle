@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { business, returns } from "../../lib/business";
 
 function Refunds() {
@@ -9,9 +10,11 @@ function Refunds() {
             <section>
                 <h2>Cancelling an order</h2>
                 <p>
-                    You can cancel an order within {returns.cancelWindow} of placing it. Email us
+                    You can cancel an order within {returns.cancelWindow} of placing it, as long as
+                    it hasn't shipped. Use the Cancel button on the order in{" "}
+                    <Link to="/orders">My orders</Link>, or email us
                     at <a href={`mailto:${business.email}`}>{business.email}</a> or
-                    call <a href={business.phoneHref}>{business.phone}</a> with your order ID.
+                    call <a href={business.phoneHref}>{business.phone}</a> with your order number.
                     We'll refund the full amount. There is no cancellation charge.
                 </p>
                 <p>
@@ -34,7 +37,11 @@ function Refunds() {
                     You can return an item within {returns.returnWindowDays} days of delivery. It
                     must be unworn and unwashed, with its original tags still attached.
                 </p>
-                <p>To start a return, contact us with your order ID within those {returns.returnWindowDays} days.</p>
+                <p>
+                    To start a return, use the Return button on the order in{" "}
+                    <Link to="/orders">My orders</Link>, or contact us with your order number,
+                    within those {returns.returnWindowDays} days.
+                </p>
                 <ul>
                     <li>
                         <strong>Damaged, defective or wrong item:</strong> send us a photo when you

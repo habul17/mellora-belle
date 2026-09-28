@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react"
 import { Link, Navigate, useParams } from "react-router-dom"
 import { getToken, authFetch } from "../lib/api"
-import { ORDER_STEPS, statusLabel, formatDate } from "../lib/orders"
+import { ORDER_STEPS, RETURN_REASONS, statusLabel, formatDate, formatDateTime, soldOutBeforePayment } from "../lib/orders"
 import type { OrderView } from "../lib/orders"
+import { returns } from "../lib/business"
 
 function OrderDetail() {
     const token = getToken();
@@ -29,8 +30,10 @@ function OrderDetail() {
     if (error) return <div>{error} <Link to="/orders">See all your orders</Link></div>;
     if (!order) return <div>Loading...</div>;
 
-    const reachedIndex = ORDER_STEPS.findIndex((step) => step.status === order.status);
-    const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
+    // A return request or a return happens after delivery, so every step was reached.
+    const stepStatus = order.status === "RETURN_REQUESTED" || order.status === "RETURNED" ? "DELIVERED" : order.status;
+    const reachedIndex = ORDER_STEPS.findIndex((step) => step.status === stepStatus);
+    const shipped = order.shippedAt !== null;
 
     return (
         <main>
@@ -39,13 +42,7 @@ function OrderDetail() {
             <p>Placed on {formatDate(order.paidAt ?? order.createdAt)}</p>
             <p><strong>{statusLabel(order)}</strong></p>
 
-            {order.refundNeeded && (
-                <p>
-                    Sorry, this item sold out before your payment reached us. Your full payment
-                    of ₹{order.totalAmount} will be refunded to your original payment method
-                    within 5-7 working days.
-                </p>
-            )}
+            <OrderOutcome order={order} />
 
             {reachedIndex >= 0 && (
                 <ol>
@@ -56,6 +53,9 @@ function OrderDetail() {
                     ))}
                 </ol>
             )}
+
+            {order.cancelUntil && <CancelForm order={order} onChange={setOrder} />}
+            {order.returnUntil && <ReturnForm order={order} onChange={setOrder} />}
 
             {shipped && (
                 <section>
@@ -83,7 +83,11 @@ function OrderDetail() {
                         </p>
                     </div>
                 ))}
-                <p><strong>Total paid: ₹{order.totalAmount}</strong></p>
+                <p>
+                    Subtotal: ₹{order.subtotal}<br />
+                    Shipping: {order.shippingCost ? `₹${order.shippingCost}` : "Free"}<br />
+                    <strong>Total paid: ₹{order.totalAmount}</strong>
+                </p>
             </section>
 
             <section>
@@ -102,6 +106,141 @@ function OrderDetail() {
                 order #{order.number}.
             </p>
         </main>
+    );
+}
+
+// What happened with a cancellation, return or refund, in plain words.
+function OrderOutcome({ order }: { order: OrderView }) {
+    const refund = order.refundedAt
+        ? <p>We refunded ₹{order.refundAmount} on {formatDate(order.refundedAt)} to your original payment
+            method{order.refundReference && <> (reference {order.refundReference})</>}. Banks can take
+            {" "}{returns.refundDays} to show it.</p>
+        : order.refundNeeded
+            ? <p>We'll refund you to your original payment method within {returns.refundDays}, and email you when it's done.</p>
+            : null;
+
+    if (order.status === "CANCELLED" && soldOutBeforePayment(order)) {
+        return (
+            <>
+                <p>
+                    Sorry, this item sold out before your payment reached us, so the order was
+                    cancelled. Your full payment of ₹{order.totalAmount} will be refunded.
+                </p>
+                {refund}
+            </>
+        );
+    }
+
+    return (
+        <>
+            {order.status === "CANCELLATION_REQUESTED" && order.cancelRequestedAt && (
+                <p>You asked to cancel this order on {formatDateTime(order.cancelRequestedAt)}. We'll confirm by email shortly.</p>
+            )}
+            {order.status === "RETURN_REQUESTED" && order.returnRequestedAt && (
+                <p>
+                    You asked to return this order on {formatDate(order.returnRequestedAt)}. We'll email
+                    you with how to send it back.
+                </p>
+            )}
+            {order.status === "CANCELLED" && order.cancelledAt && <p>This order was cancelled on {formatDate(order.cancelledAt)}.</p>}
+            {order.status === "RETURNED" && order.returnedAt && <p>We received your return on {formatDate(order.returnedAt)}.</p>}
+            {order.requestDeclineNote && order.status !== "CANCELLATION_REQUESTED" && order.status !== "RETURN_REQUESTED" && (
+                <p>We couldn't accept your request: {order.requestDeclineNote}</p>
+            )}
+            {refund}
+        </>
+    );
+}
+
+type FormProps = { order: OrderView; onChange: (order: OrderView) => void };
+
+function CancelForm({ order, onChange }: FormProps) {
+    const [reason, setReason] = useState("");
+    const [message, setMessage] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    async function submit() {
+        if (!window.confirm(`Cancel order #${order.number}?`)) return;
+
+        setBusy(true);
+        setMessage("");
+        try {
+            const data = await authFetch(`/orders/${order.id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });
+            if (data.order) onChange(data.order);
+            else setMessage(data.error ?? "Something went wrong");
+        } catch {
+            setMessage("Could not reach the server. Please try again.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <section>
+            <h2>Cancel this order</h2>
+            <p>You can cancel until {formatDateTime(order.cancelUntil!)}. You'll get a full refund.</p>
+            <p>
+                <label>
+                    Reason (optional)
+                    <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+                </label>
+            </p>
+            <button onClick={submit} disabled={busy}>{busy ? "Sending…" : "Cancel order"}</button>
+            {message && <p role="alert">{message}</p>}
+        </section>
+    );
+}
+
+function ReturnForm({ order, onChange }: FormProps) {
+    const [reason, setReason] = useState("");
+    const [details, setDetails] = useState("");
+    const [message, setMessage] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    async function submit() {
+        if (!reason) {
+            setMessage("Choose a reason for the return.");
+            return;
+        }
+
+        setBusy(true);
+        setMessage("");
+        try {
+            const data = await authFetch(`/orders/${order.id}/return`, { method: "POST", body: JSON.stringify({ reason, details }) });
+            if (data.order) onChange(data.order);
+            else setMessage(data.error ?? "Something went wrong");
+        } catch {
+            setMessage("Could not reach the server. Please try again.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <section>
+            <h2>Return this order</h2>
+            <p>
+                You can ask for a return until {formatDate(order.returnUntil!)}. Items must be unworn
+                and unwashed, with their tags attached. See our <Link to="/refunds">returns policy</Link>.
+            </p>
+            <p>
+                <label>
+                    Reason
+                    <select value={reason} onChange={(e) => setReason(e.target.value)}>
+                        <option value="">Choose one…</option>
+                        {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                </label>
+            </p>
+            <p>
+                <label>
+                    Anything we should know? (optional)
+                    <textarea value={details} maxLength={500} onChange={(e) => setDetails(e.target.value)} />
+                </label>
+            </p>
+            <button onClick={submit} disabled={busy}>{busy ? "Sending…" : "Request a return"}</button>
+            {message && <p role="alert">{message}</p>}
+        </section>
     );
 }
 
