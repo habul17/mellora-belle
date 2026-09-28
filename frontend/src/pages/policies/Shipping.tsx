@@ -30,7 +30,31 @@ function Shipping() {
 
             <section>
                 <h2>Shipping charges</h2>
-                <p>Shipping charges, if any, are shown at checkout before you pay.</p>
+                <p>
+                    Shipping depends on where you are and how heavy your order is. We ship from
+                    Coimbatore, so orders within Tamil Nadu cost less.
+                </p>
+                <table>
+                    <thead>
+                        <tr><th>Delivering to</th><th>Up to 1 kg</th><th>Each extra kg (or part of one)</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Tamil Nadu and Puducherry</td>
+                            <td>₹{shipping.rates.tamilNadu.firstKg}</td>
+                            <td>₹{shipping.rates.tamilNadu.perExtraKg}</td>
+                        </tr>
+                        <tr>
+                            <td>Rest of India</td>
+                            <td>₹{shipping.rates.restOfIndia.firstKg}</td>
+                            <td>₹{shipping.rates.restOfIndia.perExtraKg}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>
+                    Your exact shipping charge is worked out from your pincode and shown at
+                    checkout, before you pay.
+                </p>
             </section>
 
             <section>

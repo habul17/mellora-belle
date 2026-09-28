@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { getGuestCart, updateGuestCartItem, removeFromGuestCart } from "../lib/guestCart"
 import { getToken, authFetch } from "../lib/api"
+import { shipping } from "../lib/business"
 
 type CartLine = {
     id: string;
@@ -117,7 +118,11 @@ function Cart() {
                     <button onClick={() => removeLine(line)}>Remove</button>
                 </div>
             ))}
-            <h2>Total: ₹{total}</h2>
+            <h2>Subtotal: ₹{total}</h2>
+            <p>
+                Shipping is added at checkout from your pincode: from ₹{shipping.rates.tamilNadu.firstKg} in
+                Tamil Nadu and ₹{shipping.rates.restOfIndia.firstKg} to the rest of India.
+            </p>
             <Link to="/checkout">Proceed to Checkout</Link>
         </div>
     );

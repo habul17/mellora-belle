@@ -6,6 +6,8 @@ import { loadRazorpay } from "../lib/razorpay"
 type Order = {
     id: string;
     number: number;
+    subtotal: number;
+    shippingCost: number;
     totalAmount: number;
     status: string;
     reservedUntil: string;
@@ -194,17 +196,25 @@ function Checkout() {
             <div>
                 <h1>Review and pay</h1>
                 <p>Order #{order.number}</p>
-                <p>Status: {order.status}</p>
-                <p>Total: Rs {order.totalAmount}</p>
+                <p>
+                    Subtotal: ₹{order.subtotal}<br />
+                    Shipping: {order.shippingCost ? `₹${order.shippingCost}` : "Free"}<br />
+                    <strong>Total: ₹{order.totalAmount}</strong>
+                </p>
                 <p>
                     Shipping to: {order.fullName}, {order.addressLine1}
                     {order.addressLine2 ? `, ${order.addressLine2}` : ""}, {order.city},{" "}
                     {order.state} - {order.pincode}
                 </p>
+                <p>
+                    <button onClick={() => { setOrder(null); setMessage(""); }} disabled={paying}>
+                        Change address
+                    </button>
+                </p>
                 <p>Stock held until {new Date(order.reservedUntil).toLocaleTimeString()}</p>
 
                 <button onClick={handlePay} disabled={paying}>
-                    {paying ? "Opening payment..." : `Pay Rs ${order.totalAmount}`}
+                    {paying ? "Opening payment..." : `Pay ₹${order.totalAmount}`}
                 </button>
 
                 {message && <p>{message}</p>}
@@ -232,7 +242,7 @@ function Checkout() {
                 onChange={(e) => setPincode(e.target.value)} />
 
             <button onClick={handleSubmit} disabled={submitting}>
-                {submitting ? "Placing order..." : "Place order"}
+                {submitting ? "Working out your total..." : "Continue to payment"}
             </button>
 
             {message && <p>{message}</p>}

@@ -24,6 +24,13 @@ export const business = {
 export const shipping = {
     dispatchDays: "1-2 working days",
     deliveryDays: "3-7 working days",
+    // Rupees: the first kilo, then each extra kilo or part of one. For display
+    // only. Checkout charges SHIPPING_RATES in backend/src/lib/shipping.ts,
+    // so change both together.
+    rates: {
+        tamilNadu: { firstKg: 60, perExtraKg: 30 },
+        restOfIndia: { firstKg: 90, perExtraKg: 50 },
+    },
 };
 
 export const returns = {

@@ -26,8 +26,10 @@ function Pricing() {
             <section>
                 <h2>What you pay</h2>
                 <p>
-                    You pay the product price plus shipping charges, if any. Your checkout page
-                    shows the full total before you pay. There are no hidden charges.
+                    You pay the product price plus shipping, which depends on your pincode and
+                    your order's weight (see <Link to="/shipping">Shipping &amp; Delivery</Link>).
+                    Your checkout page shows the full total before you pay. There are no hidden
+                    charges.
                 </p>
                 <p>
                     Prices can change over time. You always pay the price shown when you place
