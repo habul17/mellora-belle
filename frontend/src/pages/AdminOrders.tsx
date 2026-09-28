@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link, Navigate } from "react-router-dom"
 import { getToken, authFetch } from "../lib/api"
-import { statusLabel, formatDate } from "../lib/orders"
+import { statusLabel, formatDate, formatDateTime, courierProblem } from "../lib/orders"
 import type { AdminOrderView, OrderStatus } from "../lib/orders"
 import AdminNav from "../components/AdminNav"
 
@@ -35,13 +35,91 @@ function sales(orders: AdminOrderView[], days: number) {
 }
 
 type ShipForm = { courierName: string; trackingNumber: string; trackingUrl: string };
-const EMPTY_SHIP_FORM: ShipForm = { courierName: "", trackingNumber: "", trackingUrl: "" };
 type RefundForm = { amount: string; reference: string };
+
+// A booking takes a few seconds: while one is under way, the list is fetched
+// again every few seconds, up to this many times.
+const POLL_MS = 4000;
+const MAX_POLLS = 30;
+
+function shipmentUnderWay(order: AdminOrderView) {
+    const s = order.shipment;
+    return !!s && ((s.status === "BOOKING" && s.attempts === 0 && order.status === "PACKED") || s.status === "CANCELLING");
+}
+
+// The Shiprocket booking, and what to do about it.
+function ShipmentInfo({ order, shiprocket, busy, onBook }: { order: AdminOrderView; shiprocket: boolean; busy: boolean; onBook: () => void }) {
+    const s = order.shipment;
+    const packed = order.status === "PACKED";
+
+    if (!s) {
+        if (!shiprocket || !packed) return null;
+        return <p>Not booked with Shiprocket. <button disabled={busy} onClick={onBook}>Book with Shiprocket</button></p>;
+    }
+
+    const update = s.courierStatus && (
+        <p>
+            Courier update: <strong>{s.courierStatus}</strong>
+            {s.courierStatusAt && <> ({formatDateTime(s.courierStatusAt)})</>}
+            {courierProblem(s.courierStatus) && <> · <strong>needs attention in the Shiprocket panel</strong></>}
+        </p>
+    );
+
+    let message;
+    switch (s.status) {
+        case "BOOKING":
+            message = order.status === "CANCELLATION_REQUESTED"
+                ? <p>Shiprocket booking paused until you answer the cancellation request.</p>
+                : s.attempts === 0
+                    ? <p>Booking with Shiprocket…</p>
+                    : <p>Shiprocket booking failed {s.attempts} {s.attempts === 1 ? "time" : "times"}, trying again automatically. Last error: {s.lastError}</p>;
+            break;
+        case "BOOKED":
+            message = (
+                <p>
+                    Booked with Shiprocket: {s.courierName}, AWB {s.awb}.{" "}
+                    {s.pickupScheduledFor ? `Pickup on ${formatDateTime(s.pickupScheduledFor)}.` : s.pickupRequestedAt && "Pickup requested."}{" "}
+                    {s.labelUrl && <a href={s.labelUrl} target="_blank" rel="noreferrer">Print the label</a>}
+                    {packed && <><br />It moves to Shipped by itself when the courier collects it.</>}
+                </p>
+            );
+            break;
+        case "FAILED":
+            message = packed ? (
+                <p>
+                    <strong>Shiprocket booking failed:</strong> {s.lastError}<br />
+                    Fix it in Shiprocket (for example, add money to the wallet), then{" "}
+                    <button disabled={busy} onClick={onBook}>Try again</button>, or ship it another way and fill in the form below.
+                </p>
+            ) : order.status === "CANCELLED" ? (
+                <p>
+                    <strong>Couldn't cancel the Shiprocket booking:</strong> {s.lastError}<br />
+                    <button disabled={busy} onClick={onBook}>Try again</button> or cancel it in the Shiprocket panel.
+                </p>
+            ) : (
+                <p><strong>Shiprocket booking failed:</strong> {s.lastError}</p>
+            );
+            break;
+        case "CANCELLING":
+            message = <p>Cancelling the Shiprocket booking…</p>;
+            break;
+        case "CANCELLED":
+            message = packed
+                ? <p>The Shiprocket booking was cancelled. <button disabled={busy} onClick={onBook}>Book again</button></p>
+                : <p>Shiprocket booking cancelled.</p>;
+            break;
+    }
+
+    return <>{message}{update}</>;
+}
 
 function AdminOrders() {
     const token = getToken();
 
     const [orders, setOrders] = useState<AdminOrderView[] | null>(null);
+    // Whether marking an order packed books it with Shiprocket.
+    const [shiprocket, setShiprocket] = useState(false);
+    const pollsLeft = useRef(MAX_POLLS);
     const [error, setError] = useState<string | null>(null);
     const [view, setView] = useState("to-pack");
     const [shipForms, setShipForms] = useState<Record<string, ShipForm>>({});
@@ -63,11 +141,27 @@ function AdminOrders() {
                     return;
                 }
                 setOrders(data.orders);
+                setShiprocket(Boolean(data.shiprocket));
                 // A customer waiting on an answer comes first.
                 if (data.orders.some(VIEWS[0]!.matches)) setView("requests");
             })
             .catch(() => setError("Could not reach the server"));
     }, [token]);
+
+    const underWay = orders?.some(shipmentUnderWay) ?? false;
+
+    useEffect(() => {
+        if (!underWay || pollsLeft.current <= 0) return;
+
+        const timer = setTimeout(() => {
+            pollsLeft.current -= 1;
+            authFetch("/admin/orders")
+                .then((data) => { if (data.orders) setOrders(data.orders); })
+                .catch(() => { /* try again on the next tick */ });
+        }, POLL_MS);
+
+        return () => clearTimeout(timer);
+    }, [underWay, orders]);
 
     if (!token) {
         return <Navigate to="/login?from=/admin/orders" replace />;
@@ -76,8 +170,13 @@ function AdminOrders() {
     if (error) return <div className="admin">{error}</div>;
     if (!orders) return <div className="admin">Loading...</div>;
 
-    function updateShipForm(orderId: string, field: keyof ShipForm, value: string) {
-        setShipForms((prev) => ({ ...prev, [orderId]: { ...(prev[orderId] ?? EMPTY_SHIP_FORM), [field]: value } }));
+    // Filled in from the Shiprocket booking when there is one.
+    function shipFormFor(order: AdminOrderView): ShipForm {
+        return shipForms[order.id] ?? { courierName: order.courierName ?? "", trackingNumber: order.trackingNumber ?? "", trackingUrl: order.trackingUrl ?? "" };
+    }
+
+    function updateShipForm(order: AdminOrderView, field: keyof ShipForm, value: string) {
+        setShipForms((prev) => ({ ...prev, [order.id]: { ...shipFormFor(order), [field]: value } }));
     }
 
     function refundFormFor(order: AdminOrderView): RefundForm {
@@ -99,6 +198,7 @@ function AdminOrders() {
             const data = await authFetch(`/admin/orders/${order.id}/${path}`, init);
 
             if (data.order) {
+                pollsLeft.current = MAX_POLLS;
                 setOrders((prev) => prev && prev.map((o) => (o.id === order.id ? data.order : o)));
                 setNotice(`Order #${order.number} ${done}`);
             } else {
@@ -115,14 +215,22 @@ function AdminOrders() {
         if (status === "DELIVERED" && !window.confirm(`Mark order #${order.number} as delivered? This can't be undone.`)) {
             return;
         }
+        const done = status === "PACKED" && shiprocket
+            ? "marked packed and is being booked with Shiprocket. It's now under To ship."
+            : DONE_NOTICE[status] ?? "updated.";
         act(order, "status", {
             method: "PATCH",
-            body: JSON.stringify({ status, ...(status === "SHIPPED" && shipForms[order.id]) }),
-        }, DONE_NOTICE[status] ?? "updated.");
+            body: JSON.stringify({ status, ...(status === "SHIPPED" && shipFormFor(order)) }),
+        }, done);
+    }
+
+    function book(order: AdminOrderView) {
+        act(order, "shipment", { method: "POST" }, "is being booked with Shiprocket.");
     }
 
     function cancel(order: AdminOrderView) {
-        if (!window.confirm(`Cancel order #${order.number}? Its stock goes back on sale and the customer is emailed. You then refund them in Razorpay.`)) {
+        const booked = order.shipment?.status === "BOOKED" || order.shipment?.status === "BOOKING";
+        if (!window.confirm(`Cancel order #${order.number}? Its stock goes back on sale and the customer is emailed.${booked ? " The Shiprocket booking is cancelled too." : ""} You then refund them in Razorpay.`)) {
             return;
         }
         act(order, "cancel", { method: "POST" }, "cancelled and the customer is being emailed. Refund it next: it's under Refund needed.");
@@ -169,7 +277,7 @@ function AdminOrders() {
             {visible.length === 0 && <p>Nothing here.</p>}
 
             {visible.map((order) => {
-                const form = shipForms[order.id] ?? EMPTY_SHIP_FORM;
+                const form = shipFormFor(order);
                 const refund = refundFormFor(order);
                 const busy = busyId === order.id;
                 const openRequest = order.status === "CANCELLATION_REQUESTED" || order.status === "RETURN_REQUESTED";
@@ -203,6 +311,8 @@ function AdminOrders() {
                             </p>
                         )}
 
+                        <ShipmentInfo order={order} shiprocket={shiprocket} busy={busy} onBook={() => book(order)} />
+
                         {openRequest && (
                             <div>
                                 <p>
@@ -231,12 +341,15 @@ function AdminOrders() {
 
                         {order.status === "PACKED" && (
                             <div>
+                                {order.shipment?.status === "BOOKED" && (
+                                    <p>Only if the courier has collected it and the order hasn't moved by itself:</p>
+                                )}
                                 <input placeholder="Courier (e.g. Delhivery)" value={form.courierName}
-                                    onChange={(e) => updateShipForm(order.id, "courierName", e.target.value)} />
+                                    onChange={(e) => updateShipForm(order, "courierName", e.target.value)} />
                                 <input placeholder="Tracking number" value={form.trackingNumber}
-                                    onChange={(e) => updateShipForm(order.id, "trackingNumber", e.target.value)} />
+                                    onChange={(e) => updateShipForm(order, "trackingNumber", e.target.value)} />
                                 <input placeholder="Tracking link (optional)" value={form.trackingUrl}
-                                    onChange={(e) => updateShipForm(order.id, "trackingUrl", e.target.value)} />
+                                    onChange={(e) => updateShipForm(order, "trackingUrl", e.target.value)} />
                                 <button disabled={busy} onClick={() => moveTo(order, "SHIPPED")}>
                                     Mark as shipped and email the customer
                                 </button>

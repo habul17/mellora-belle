@@ -54,10 +54,33 @@ export type OrderView = {
     items: OrderItemView[];
 };
 
+export type ShipmentStatus = "BOOKING" | "BOOKED" | "FAILED" | "CANCELLING" | "CANCELLED";
+
+// The Shiprocket booking (backend/src/lib/shipments.ts).
+export type ShipmentView = {
+    status: ShipmentStatus;
+    awb: string | null;
+    courierName: string | null;
+    labelUrl: string | null;
+    pickupRequestedAt: string | null;
+    pickupScheduledFor: string | null;
+    bookedAt: string | null;
+    attempts: number;
+    lastError: string | null;
+    courierStatus: string | null;
+    courierStatusAt: string | null;
+};
+
 export type AdminOrderView = OrderView & {
     customerEmail: string;
     razorpayPaymentId: string | null;
+    shipment: ShipmentView | null;
 };
+
+// Courier updates that need the owner to step in (in the Shiprocket panel).
+export function courierProblem(status: string | null) {
+    return !!status && /RTO|LOST|DAMAGED|DESTROYED|UNDELIVERED|EXCEPTION|ERROR|UNTRACEABLE|DISPOSED|CANCEL/.test(status);
+}
 
 // The steps a customer sees an order move through, in order.
 export const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
