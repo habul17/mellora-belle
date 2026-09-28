@@ -2,8 +2,13 @@ import { useState } from "react"
 import type { FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { API } from "../lib/api"
+import AccountShell from "../components/AccountShell"
+import { Button, Field, Notice } from "../components/ui"
+import { inputClass, linkClass } from "../lib/styles"
+import { usePageTitle } from "../lib/usePageTitle"
 
 function ForgotPassword() {
+    usePageTitle("Reset your password");
     const [email, setEmail] = useState("");
     const [sent, setSent] = useState(false);
     const [message, setMessage] = useState("");
@@ -40,46 +45,39 @@ function ForgotPassword() {
 
     if (sent) {
         return (
-            <main>
-                <h1>Check your email</h1>
+            <AccountShell title="Check your email" intro={
                 <p>
                     If there's an account for {email}, we've sent it a link to reset your
                     password. The link works for 15 minutes.
                 </p>
-                <p>Nothing arrived? Check your spam folder, or <button onClick={() => setSent(false)}>try again</button>.</p>
-                <p><Link to="/login">Back to log in</Link></p>
-            </main>
+            }>
+                <p className="text-center text-sm text-muted">
+                    Nothing arrived? Check your spam folder, or{" "}
+                    <button type="button" onClick={() => setSent(false)} className={`text-ink ${linkClass}`}>try again</button>.
+                </p>
+                <p className="text-center text-sm"><Link to="/login" className={linkClass}>Back to log in</Link></p>
+            </AccountShell>
         );
     }
 
     return (
-        <main>
-            <h1>Reset your password</h1>
-            <p>Enter the email you signed up with and we'll send you a link to set a new password.</p>
+        <AccountShell title="Reset your password"
+            intro={<p>Enter the email you signed up with and we'll send you a link to set a new password.</p>}>
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <Field label="Email">
+                    <input type="email" autoComplete="email" required className={inputClass}
+                        value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
 
-            <form onSubmit={handleSubmit}>
-                <p>
-                    <label>
-                        Email
-                        <input
-                            type="email"
-                            autoComplete="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </label>
-                </p>
+                {message && <Notice tone="error">{message}</Notice>}
 
-                <button type="submit" disabled={submitting}>
+                <Button type="submit" disabled={submitting} className="w-full">
                     {submitting ? "Sending…" : "Send reset link"}
-                </button>
+                </Button>
             </form>
 
-            {message && <p role="alert">{message}</p>}
-
-            <p><Link to="/login">Back to log in</Link></p>
-        </main>
+            <p className="text-center text-sm"><Link to="/login" className={linkClass}>Back to log in</Link></p>
+        </AccountShell>
     );
 }
 

@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { business, returns } from "../../lib/business";
+import PolicyPage from "../../components/PolicyPage";
 
 function Refunds() {
     return (
-        <main>
+        <PolicyPage title="Cancellation & Refunds">
             <h1>Cancellation &amp; Refunds</h1>
             <p>Last updated: {business.policiesUpdated}</p>
 
@@ -71,7 +72,7 @@ function Refunds() {
                     return. We'll contact you to arrange sending it back.
                 </p>
             </section>
-        </main>
+        </PolicyPage>
     );
 }
 

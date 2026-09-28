@@ -76,6 +76,23 @@ function send(path: string, options: RequestInit) {
     });
 }
 
+// For requests the visitor didn't ask for (the header's cart count): when the
+// session has ended, answer null rather than sending them to the login page.
+export async function authFetchQuiet(path: string) {
+    let response = await send(path, {});
+
+    if (response.status === 401 && await refreshAccessToken()) {
+        response = await send(path, {});
+    }
+
+    if (response.status === 401) {
+        clearToken();
+        return null;
+    }
+
+    return response.json();
+}
+
 export async function authFetch(path: string, options: RequestInit = {}) {
     let response = await send(path, options);
 

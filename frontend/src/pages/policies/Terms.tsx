@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { business } from "../../lib/business";
 import GrievanceOfficer from "../../components/GrievanceOfficer";
+import PolicyPage from "../../components/PolicyPage";
 
 function Terms() {
     return (
-        <main>
+        <PolicyPage title="Terms & Conditions">
             <h1>Terms &amp; Conditions</h1>
             <p>Last updated: {business.policiesUpdated}</p>
 
@@ -104,7 +105,7 @@ function Terms() {
             </section>
 
             <GrievanceOfficer />
-        </main>
+        </PolicyPage>
     );
 }
 

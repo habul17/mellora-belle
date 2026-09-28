@@ -2,8 +2,10 @@
 // It is loaded only when a customer actually pays, and only once per page.
 let loading: Promise<boolean> | null = null;
 
+const hasRazorpay = () => "Razorpay" in window;
+
 export function loadRazorpay(): Promise<boolean> {
-    if ((window as any).Razorpay) return Promise.resolve(true);
+    if (hasRazorpay()) return Promise.resolve(true);
 
     if (!loading) {
         loading = new Promise((resolve) => {

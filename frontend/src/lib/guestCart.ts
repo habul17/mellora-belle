@@ -1,7 +1,11 @@
+import { announceCartChange } from "./cartCount"
+
 export type GuestCartItem = {
     variantId: string;
     quantity: number;
     productName: string;
+    // Missing on items added before the cart linked back to the product.
+    slug?: string;
     image: string;
     price: number;
     size: string;
@@ -11,11 +15,20 @@ export type GuestCartItem = {
 export function getGuestCart(): GuestCartItem[] {
     const raw = localStorage.getItem("guestCart");
     if (!raw) return [];
-    return JSON.parse(raw);
+
+    // Anything unreadable (hand-edited, or saved by an older version of the
+    // site) counts as an empty cart rather than breaking every page that reads it.
+    try {
+        const items = JSON.parse(raw);
+        return Array.isArray(items) ? items : [];
+    } catch {
+        return [];
+    }
 }
 
 export function saveGuestCart(items: GuestCartItem[]) {
     localStorage.setItem("guestCart", JSON.stringify(items));
+    announceCartChange();
 }
 
 export function addToGuestCart(item: GuestCartItem) {
@@ -47,4 +60,5 @@ export function removeFromGuestCart(variantId: string) {
 
 export function clearGuestCart() {
     localStorage.removeItem("guestCart");
+    announceCartChange();
 }

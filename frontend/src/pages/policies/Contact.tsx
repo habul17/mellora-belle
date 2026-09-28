@@ -1,9 +1,10 @@
 import { business } from "../../lib/business";
 import GrievanceOfficer from "../../components/GrievanceOfficer";
+import PolicyPage from "../../components/PolicyPage";
 
 function Contact() {
     return (
-        <main>
+        <PolicyPage title="Contact Us">
             <h1>Contact Us</h1>
             <p>Questions about an order, a size or a return? We're happy to help.</p>
 
@@ -25,7 +26,7 @@ function Contact() {
             </section>
 
             <GrievanceOfficer />
-        </main>
+        </PolicyPage>
     );
 }
 

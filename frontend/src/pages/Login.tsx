@@ -3,8 +3,13 @@ import type { FormEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { API } from "../lib/api"
 import { finishLogin, safeRedirect, withFrom } from "../lib/account"
+import AccountShell from "../components/AccountShell"
+import { Button, Field, Notice } from "../components/ui"
+import { inputClass, linkClass } from "../lib/styles"
+import { usePageTitle } from "../lib/usePageTitle"
 
 function Login() {
+    usePageTitle("Log in");
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const from = searchParams.get("from");
@@ -52,62 +57,38 @@ function Login() {
     }
 
     return (
-        <main>
-            <h1>Log in</h1>
+        <AccountShell title="Log in" intro={<p>Welcome back.</p>}>
+            {sessionExpired && !message && <Notice>Your session expired. Please log in again.</Notice>}
 
-            {sessionExpired && !message && <p>Your session expired. Please log in again.</p>}
-
-            <form onSubmit={handleSubmit}>
-                <p>
-                    <label>
-                        Email
-                        <input
-                            type="email"
-                            autoComplete="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </label>
-                </p>
-                <p>
-                    <label>
-                        Password
-                        <input
-                            type="password"
-                            autoComplete="current-password"
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </label>
-                </p>
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <Field label="Email">
+                    <input type="email" autoComplete="email" required className={inputClass}
+                        value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+                <Field label="Password">
+                    <input type="password" autoComplete="current-password" required className={inputClass}
+                        value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
 
                 {needs2FA && (
-                    <p>
-                        <label>
-                            2FA code
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                value={totpCode}
-                                onChange={(e) => setTotpCode(e.target.value)}
-                            />
-                        </label>
-                    </p>
+                    <Field label="2FA code" hint="The 6-digit code from your authenticator app.">
+                        <input type="text" inputMode="numeric" autoComplete="one-time-code" className={inputClass}
+                            value={totpCode} onChange={(e) => setTotpCode(e.target.value)} />
+                    </Field>
                 )}
 
-                <button type="submit" disabled={submitting}>
+                {message && <Notice tone="error">{message}</Notice>}
+
+                <Button type="submit" disabled={submitting} className="w-full">
                     {submitting ? "Logging in…" : "Log in"}
-                </button>
+                </Button>
             </form>
 
-            {message && <p role="alert">{message}</p>}
-
-            <p><Link to="/forgot-password">Forgot your password?</Link></p>
-            <p>New here? <Link to={withFrom("/signup", from)}>Create an account</Link></p>
-        </main>
+            <p className="text-center text-sm"><Link to="/forgot-password" className={linkClass}>Forgot your password?</Link></p>
+            <p className="border-t border-stone pt-6 text-center text-sm text-muted">
+                New here? <Link to={withFrom("/signup", from)} className={`text-ink ${linkClass}`}>Create an account</Link>
+            </p>
+        </AccountShell>
     );
 }
 

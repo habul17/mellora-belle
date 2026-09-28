@@ -3,8 +3,13 @@ import type { FormEvent } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { API } from "../lib/api"
 import { finishLogin, safeRedirect, withFrom } from "../lib/account"
+import AccountShell from "../components/AccountShell"
+import { Button, Field, Notice } from "../components/ui"
+import { inputClass, linkClass } from "../lib/styles"
+import { usePageTitle } from "../lib/usePageTitle"
 
 function Signup() {
+    usePageTitle("Create an account");
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const from = searchParams.get("from");
@@ -44,47 +49,31 @@ function Signup() {
     }
 
     return (
-        <main>
-            <h1>Create an account</h1>
-            <p>You'll need one to place an order and track it.</p>
+        <AccountShell title="Create an account" intro={<p>You'll need one to place an order and track it.</p>}>
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <Field label="Email">
+                    <input type="email" autoComplete="email" required className={inputClass}
+                        value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+                <Field label="Password" hint="At least 8 characters.">
+                    <input type="password" autoComplete="new-password" required minLength={8} className={inputClass}
+                        value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
 
-            <form onSubmit={handleSubmit}>
-                <p>
-                    <label>
-                        Email
-                        <input
-                            type="email"
-                            autoComplete="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </label>
-                </p>
-                <p>
-                    <label>
-                        Password
-                        <input
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            minLength={8}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </label>
-                </p>
-                <p>At least 8 characters.</p>
+                {message && <Notice tone="error">{message}</Notice>}
 
-                <button type="submit" disabled={submitting}>
+                <Button type="submit" disabled={submitting} className="w-full">
                     {submitting ? "Creating your account…" : "Create account"}
-                </button>
+                </Button>
+                <p className="text-center text-xs text-muted">
+                    By creating an account you agree to our <Link to="/terms" className={linkClass}>terms</Link> and <Link to="/privacy" className={linkClass}>privacy policy</Link>.
+                </p>
             </form>
 
-            {message && <p role="alert">{message}</p>}
-
-            <p>Already have an account? <Link to={withFrom("/login", from)}>Log in</Link></p>
-        </main>
+            <p className="border-t border-stone pt-6 text-center text-sm text-muted">
+                Already have an account? <Link to={withFrom("/login", from)} className={`text-ink ${linkClass}`}>Log in</Link>
+            </p>
+        </AccountShell>
     );
 }
 

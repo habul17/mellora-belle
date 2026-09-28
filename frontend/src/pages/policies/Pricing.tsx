@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { business } from "../../lib/business";
+import PolicyPage from "../../components/PolicyPage";
 
 function Pricing() {
     return (
-        <main>
+        <PolicyPage title="Pricing">
             <h1>Pricing</h1>
             <p>Last updated: {business.policiesUpdated}</p>
 
@@ -11,7 +12,7 @@ function Pricing() {
                 <h2>Prices</h2>
                 <p>
                     All prices are in Indian Rupees (₹) and are shown on each product's page.
-                    See our full range on the <Link to="/">shop page</Link>.
+                    See our full range on the <Link to="/shop">shop page</Link>.
                 </p>
                 <p>
                     When a product shows a struck-out price next to its price, the struck-out
@@ -45,7 +46,7 @@ function Pricing() {
                     there. We don't offer cash on delivery yet.
                 </p>
             </section>
-        </main>
+        </PolicyPage>
     );
 }
 

@@ -1,9 +1,15 @@
 import { business } from "../../lib/business";
+import { googleAnalyticsOn, metaPixelOn } from "../../lib/analytics";
 import GrievanceOfficer from "../../components/GrievanceOfficer";
+import PolicyPage from "../../components/PolicyPage";
+
+// Named only when switched on, so this page always matches what the site does.
+const trackers = [googleAnalyticsOn && "Google Analytics", metaPixelOn && "the Meta Pixel (Facebook and Instagram)"]
+    .filter(Boolean).join(" and ");
 
 function Privacy() {
     return (
-        <main>
+        <PolicyPage title="Privacy Policy">
             <h1>Privacy Policy</h1>
             <p>Last updated: {business.policiesUpdated}</p>
             <p>
@@ -45,6 +51,7 @@ function Privacy() {
                     <li>Razorpay, to take your payment.</li>
                     <li>Courier partners, who need your name, phone number and address to deliver your order.</li>
                     <li>The service providers that host our website and database and send our emails.</li>
+                    {trackers && <li>{trackers}, to measure visits and our ads (see "Your browser" below).</li>}
                     <li>Government authorities, only when the law requires it.</li>
                 </ul>
                 <p>We never sell your personal data.</p>
@@ -53,10 +60,22 @@ function Privacy() {
             <section>
                 <h2>Your browser</h2>
                 <p>
-                    We store your sign-in and your cart in your browser's local storage so you
-                    stay signed in and don't lose your cart. We don't use advertising or tracking
-                    cookies. Razorpay's payment window may use its own cookies when you pay.
+                    We keep you signed in with a secure cookie and your browser's local storage,
+                    and keep your cart in local storage so you don't lose it. Razorpay's payment
+                    window may use its own cookies when you pay.
                 </p>
+                {trackers ? (
+                    <p>
+                        We also use {trackers} to understand how visitors find and use the shop and
+                        to measure our ads. These set cookies and share details of your visit with
+                        them, such as the pages you view and what you add to your cart or buy, but
+                        never your name, address, phone number or payment details. You can block
+                        them with your browser's privacy settings or an ad blocker, and the shop
+                        works exactly the same without them.
+                    </p>
+                ) : (
+                    <p>We don't use advertising or tracking cookies.</p>
+                )}
             </section>
 
             <section>
@@ -93,7 +112,7 @@ function Privacy() {
             </section>
 
             <GrievanceOfficer />
-        </main>
+        </PolicyPage>
     );
 }
 

@@ -1,9 +1,14 @@
 import { useState } from "react"
 import type { FormEvent } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { useSearchParams } from "react-router-dom"
 import { API, clearToken } from "../lib/api"
+import AccountShell from "../components/AccountShell"
+import { Button, ButtonLink, Field, Notice } from "../components/ui"
+import { inputClass } from "../lib/styles"
+import { usePageTitle } from "../lib/usePageTitle"
 
 function ResetPassword() {
+    usePageTitle("Choose a new password");
     const [searchParams] = useSearchParams();
     const token = searchParams.get("token");
     const [password, setPassword] = useState("");
@@ -56,66 +61,44 @@ function ResetPassword() {
 
     if (!token || linkDead) {
         return (
-            <main>
-                <h1>This link doesn't work</h1>
+            <AccountShell title="This link doesn't work" intro={
                 <p>
                     Reset links work once, for 15 minutes. This one has expired, was already
                     used, or was copied incompletely.
                 </p>
-                <p><Link to="/forgot-password">Send me a new link</Link></p>
-            </main>
+            }>
+                <ButtonLink to="/forgot-password" className="w-full">Send me a new link</ButtonLink>
+            </AccountShell>
         );
     }
 
     if (done) {
         return (
-            <main>
-                <h1>Password changed</h1>
-                <p>You can now log in with your new password.</p>
-                <p><Link to="/login">Log in</Link></p>
-            </main>
+            <AccountShell title="Password changed" intro={<p>You can now log in with your new password.</p>}>
+                <ButtonLink to="/login" className="w-full">Log in</ButtonLink>
+            </AccountShell>
         );
     }
 
     return (
-        <main>
-            <h1>Choose a new password</h1>
+        <AccountShell title="Choose a new password">
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <Field label="New password" hint="At least 8 characters.">
+                    <input type="password" autoComplete="new-password" required minLength={8} className={inputClass}
+                        value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
+                <Field label="Type it again">
+                    <input type="password" autoComplete="new-password" required className={inputClass}
+                        value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                </Field>
 
-            <form onSubmit={handleSubmit}>
-                <p>
-                    <label>
-                        New password
-                        <input
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            minLength={8}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </label>
-                </p>
-                <p>
-                    <label>
-                        Type it again
-                        <input
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            value={confirm}
-                            onChange={(e) => setConfirm(e.target.value)}
-                        />
-                    </label>
-                </p>
-                <p>At least 8 characters.</p>
+                {message && <Notice tone="error">{message}</Notice>}
 
-                <button type="submit" disabled={submitting}>
+                <Button type="submit" disabled={submitting} className="w-full">
                     {submitting ? "Saving…" : "Save new password"}
-                </button>
+                </Button>
             </form>
-
-            {message && <p role="alert">{message}</p>}
-        </main>
+        </AccountShell>
     );
 }
 

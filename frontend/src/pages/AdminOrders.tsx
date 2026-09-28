@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom"
 import { getToken, authFetch } from "../lib/api"
 import { statusLabel, formatDate } from "../lib/orders"
 import type { AdminOrderView, OrderStatus } from "../lib/orders"
+import AdminNav from "../components/AdminNav"
 
 // Tabs across the top, each a filter over the same list.
 const VIEWS: { key: string; label: string; matches: (order: AdminOrderView) => boolean }[] = [
@@ -23,6 +24,15 @@ const DONE_NOTICE: Partial<Record<OrderStatus, string>> = {
     SHIPPED: "marked shipped, and the customer is being emailed. It's now under Shipped.",
     DELIVERED: "marked delivered. It's now under Delivered.",
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Orders paid in the last `days` days, and what they brought in after refunds.
+function sales(orders: AdminOrderView[], days: number) {
+    const recent = orders.filter((o) => o.paidAt && Date.now() - Date.parse(o.paidAt) < days * DAY_MS);
+    const revenue = recent.reduce((sum, o) => sum + o.totalAmount - (o.refundAmount ?? 0), 0);
+    return `${recent.length} ${recent.length === 1 ? "order" : "orders"}, ₹${revenue.toLocaleString("en-IN")}`;
+}
 
 type ShipForm = { courierName: string; trackingNumber: string; trackingUrl: string };
 const EMPTY_SHIP_FORM: ShipForm = { courierName: "", trackingNumber: "", trackingUrl: "" };
@@ -63,8 +73,8 @@ function AdminOrders() {
         return <Navigate to="/login?from=/admin/orders" replace />;
     }
 
-    if (error) return <div>{error}</div>;
-    if (!orders) return <div>Loading...</div>;
+    if (error) return <div className="admin">{error}</div>;
+    if (!orders) return <div className="admin">Loading...</div>;
 
     function updateShipForm(orderId: string, field: keyof ShipForm, value: string) {
         setShipForms((prev) => ({ ...prev, [orderId]: { ...(prev[orderId] ?? EMPTY_SHIP_FORM), [field]: value } }));
@@ -138,9 +148,13 @@ function AdminOrders() {
     const visible = orders.filter(current.matches);
 
     return (
-        <main>
-            <p><Link to="/admin">Stock</Link> · <strong>Orders</strong></p>
+        <main className="admin">
+            <AdminNav />
             <h1>Orders</h1>
+            <p>
+                Last 7 days: {sales(orders, 7)} · Last 30 days: {sales(orders, 30)} (after refunds).
+                Visitor numbers are in Google Analytics once it's switched on.
+            </p>
 
             <nav>
                 {VIEWS.map((v) => (

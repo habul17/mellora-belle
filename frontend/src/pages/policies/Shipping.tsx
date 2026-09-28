@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { business, shipping } from "../../lib/business";
+import PolicyPage from "../../components/PolicyPage";
 
 function Shipping() {
     return (
-        <main>
+        <PolicyPage title="Shipping & Delivery">
             <h1>Shipping &amp; Delivery</h1>
             <p>Last updated: {business.policiesUpdated}</p>
 
@@ -84,7 +85,7 @@ function Shipping() {
                 Questions? Email <a href={`mailto:${business.email}`}>{business.email}</a> or
                 call <a href={business.phoneHref}>{business.phone}</a>.
             </p>
-        </main>
+        </PolicyPage>
     );
 }
 

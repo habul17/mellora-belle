@@ -19,6 +19,9 @@ export const business = {
         designation: "Grievance Officer",
     },
     policiesUpdated: "25 September 2026",
+    // Shown on every product page: the Consumer Protection (E-Commerce) Rules
+    // 2020 ask sellers to state it. To confirm with the owner.
+    countryOfOrigin: "India",
 };
 
 export const shipping = {
