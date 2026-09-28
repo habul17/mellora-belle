@@ -3,6 +3,9 @@ import ProductList from "./pages/ProductList"
 import ProductDetail from "./pages/ProductDetail"
 import AdminStock from "./pages/AdminStock"
 import Login from "./pages/Login"
+import Signup from "./pages/Signup"
+import ForgotPassword from "./pages/ForgotPassword"
+import ResetPassword from "./pages/ResetPassword"
 import Cart from "./pages/Cart"
 import Checkout from "./pages/Checkout"
 import Orders from "./pages/Orders"
@@ -26,6 +29,9 @@ function App() {
         <Route path="/products/:slug" element={<ProductDetail />} />
         <Route path="/admin" element={<AdminStock />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/orders" element={<Orders />} />

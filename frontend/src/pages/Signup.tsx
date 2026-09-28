@@ -4,15 +4,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { API } from "../lib/api"
 import { finishLogin, safeRedirect, withFrom } from "../lib/account"
 
-function Login() {
+function Signup() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const from = searchParams.get("from");
-    const sessionExpired = searchParams.get("expired") === "1";
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [totpCode, setTotpCode] = useState("");
-    const [needs2FA, setNeeds2FA] = useState(false);
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
@@ -22,20 +19,15 @@ function Login() {
         setMessage("");
 
         try {
-            const response = await fetch(`${API}/login`, {
+            const response = await fetch(`${API}/signup`, {
                 method: "POST",
-                // Lets the browser keep the refresh cookie the login sets.
+                // Signing up also logs in, which sets the refresh cookie.
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, totpCode }),
+                body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
-
-            if (data.error === "2FA code required") {
-                setNeeds2FA(true);
-                return;
-            }
 
             if (data.error) {
                 setMessage(data.error);
@@ -53,9 +45,8 @@ function Login() {
 
     return (
         <main>
-            <h1>Log in</h1>
-
-            {sessionExpired && !message && <p>Your session expired. Please log in again.</p>}
+            <h1>Create an account</h1>
+            <p>You'll need one to place an order and track it.</p>
 
             <form onSubmit={handleSubmit}>
                 <p>
@@ -75,40 +66,26 @@ function Login() {
                         Password
                         <input
                             type="password"
-                            autoComplete="current-password"
+                            autoComplete="new-password"
                             required
+                            minLength={8}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </label>
                 </p>
-
-                {needs2FA && (
-                    <p>
-                        <label>
-                            2FA code
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                value={totpCode}
-                                onChange={(e) => setTotpCode(e.target.value)}
-                            />
-                        </label>
-                    </p>
-                )}
+                <p>At least 8 characters.</p>
 
                 <button type="submit" disabled={submitting}>
-                    {submitting ? "Logging in…" : "Log in"}
+                    {submitting ? "Creating your account…" : "Create account"}
                 </button>
             </form>
 
             {message && <p role="alert">{message}</p>}
 
-            <p><Link to="/forgot-password">Forgot your password?</Link></p>
-            <p>New here? <Link to={withFrom("/signup", from)}>Create an account</Link></p>
+            <p>Already have an account? <Link to={withFrom("/login", from)}>Log in</Link></p>
         </main>
     );
 }
 
-export default Login
+export default Signup
