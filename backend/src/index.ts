@@ -21,10 +21,12 @@ import { authenticator } from "otplib"
 import QRCode from "qrcode"
 import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
-import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
 import { loginLimits, signupLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { robotsTxt, sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
+import { shiprocketEnabled } from "./lib/shiprocket.js"
+import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
 
 
 dotenv.config();
@@ -908,7 +910,8 @@ app.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
             take: ADMIN_ORDER_LIMIT
         });
 
-        res.json({ orders: orders.map(toAdminOrderView) });
+        // Whether packing an order books it with Shiprocket.
+        res.json({ orders: orders.map(toAdminOrderView), shiprocket: shiprocketEnabled() });
 
     } catch (err) {
         console.log(err);
@@ -982,11 +985,17 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
 
             if (result.count === 0) return false;
 
+            if (status === "PACKED") {
+                await queueBooking(tx, id);
+            }
+
             if (status === "SHIPPED") {
                 await tx.orderEmail.createMany({
                     data: [{ orderId: id, kind: "ORDER_SHIPPED" }],
                     skipDuplicates: true
                 });
+                // Shipped another way while a Shiprocket booking was unfinished.
+                await stopBooking(tx, id, "shipped-by-hand");
             }
 
             return true;
@@ -1008,6 +1017,7 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
         if (status === "SHIPPED") {
             sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
         }
+        processShipmentsSoon();
 
         const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: adminOrderViewInclude });
 
@@ -1082,6 +1092,80 @@ app.post("/admin/orders/:id/refund", requireAuth, requireAdmin, (req, res) => {
     if (!body) return;
     return orderRequestRoute(req, res, (id) => markRefunded(id, body.amount, body.reference),
         { action: "order.refund", details: { amount: body.amount, reference: body.reference ?? null } });
+});
+
+// Book a packed order with Shiprocket, or try again after a failure or a
+// cancellation in the Shiprocket panel.
+app.post("/admin/orders/:id/shipment", requireAuth, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        await retryShipment(id);
+        await audit((req as any).user.userId, "order.shipment.book", "Order", id);
+
+        const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: adminOrderViewInclude });
+        res.json({ order: toAdminOrderView(order) });
+
+    } catch (err) {
+        if (err instanceof ShipmentActionError) {
+            return res.status(err.httpStatus).json({ error: err.message });
+        }
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+// Compares two secrets in constant time, whatever their lengths.
+function sameSecret(given: string, expected: string) {
+    const a = crypto.createHash("sha256").update(given).digest();
+    const b = crypto.createHash("sha256").update(expected).digest();
+    return crypto.timingSafeEqual(a, b);
+}
+
+// Tracking updates from Shiprocket (Settings > API > Webhooks), sent with the
+// token set there in the x-api-key header. The path avoids the words
+// Shiprocket refuses in a webhook address ("shiprocket", "sr", "kr").
+app.post("/webhooks/courier", async (req, res) => {
+    const expected = process.env.SHIPROCKET_WEBHOOK_TOKEN;
+
+    if (!expected) {
+        console.log("SHIPROCKET_WEBHOOK_TOKEN is not set");
+        return res.status(503).json({ error: "Webhook not configured" });
+    }
+
+    const given = req.headers["x-api-key"];
+
+    if (typeof given !== "string" || !sameSecret(given, expected)) {
+        return res.status(401).json({ error: "Invalid token" });
+    }
+
+    // Shiprocket's test message when the webhook is saved, and any update we
+    // can't read, get a 200 so Shiprocket doesn't keep resending them.
+    const parsed = courierWebhookBody.safeParse(req.body);
+    const status = parsed.success ? (parsed.data.current_status ?? parsed.data.shipment_status) : undefined;
+
+    if (!parsed.success || !status) {
+        return res.json({ received: true });
+    }
+
+    try {
+        const result = await applyCourierUpdate({
+            awb: parsed.data.awb,
+            status,
+            at: parseShiprocketTime(parsed.data.current_timestamp),
+            isReturn: [1, true, "1", "true"].includes(parsed.data.is_return as never),
+        });
+
+        res.json({ received: true, result });
+
+    } catch (err) {
+        console.log(err);
+        // A 500 makes Shiprocket try again later, which is what we want if
+        // our own database was briefly unavailable.
+        res.status(500).json({ error: "Something went wrong" });
+    }
 });
 
 app.post("/webhooks/razorpay", async (req, res) => {
@@ -1218,6 +1302,8 @@ setInterval(() => {
     releaseExpiredReservations().catch((err) => console.log("Reservation cleanup failed", err));
     // Retries any order email whose first send failed.
     sendQueuedOrderEmails().catch((err) => console.log("Sending queued emails failed", err));
+    // Books packed orders with Shiprocket, retrying failures.
+    processShipments().catch((err) => console.log("Processing shipments failed", err));
 }, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
 
 app.listen(process.env.PORT || 4000, () => {
