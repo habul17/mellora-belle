@@ -125,17 +125,25 @@ enum OrderStatus {
   PACKED
   SHIPPED
   DELIVERED
+  // The customer asked; the admin approves (-> CANCELLED / RETURNED) or
+  // declines (-> back to where the order was).
+  CANCELLATION_REQUESTED
   CANCELLED
+  RETURN_REQUESTED
+  RETURNED
 }
 
 model Order {
-  id          String      @id @default(cuid())
+  id           String      @id @default(cuid())
   // What the customer sees and reads out on the phone: "order #1004".
-  number      Int         @unique @default(autoincrement())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  status      OrderStatus @default(PENDING)
-  totalAmount Int
+  number       Int         @unique @default(autoincrement())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  status       OrderStatus @default(PENDING)
+  // Rupees. totalAmount = subtotal + shippingCost, and is what Razorpay charges.
+  subtotal     Int
+  shippingCost Int         @default(0)
+  totalAmount  Int
 
   fullName     String
   phone        String
@@ -151,18 +159,40 @@ model Order {
   trackingUrl    String?
 
   reservedUntil DateTime
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime  @default(now())
   paidAt        DateTime?
   shippedAt     DateTime?
   deliveredAt   DateTime?
-  items         OrderItem[]
-  payment       Payment?
-  emails        OrderEmail[]
+
+  // Cancellations and returns. Each can be requested once per order.
+  statusBeforeRequest OrderStatus?
+  cancelRequestedAt   DateTime?
+  returnRequestedAt   DateTime?
+  requestReason       String?
+  requestDeclineNote  String?
+  cancelledAt         DateTime?
+  returnedAt          DateTime?
+
+  // Filled in by the admin after refunding in the Razorpay dashboard.
+  refundedAt      DateTime?
+  refundAmount    Int?
+  refundReference String?
+  items           OrderItem[]
+  payment         Payment?
+  emails          OrderEmail[]
 }
 
 enum OrderEmailKind {
   ORDER_CONFIRMED
   ORDER_SHIPPED
+  // To the shop's inbox, so the owner acts on a request.
+  CANCELLATION_REQUESTED
+  RETURN_REQUESTED
+  // To the customer.
+  ORDER_CANCELLED
+  CANCELLATION_DECLINED
+  RETURN_DECLINED
+  REFUND_ISSUED
 }
 
 // An outbox: a row is written in the same transaction that changes the order,
