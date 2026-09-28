@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { getToken, clearToken } from "../lib/api"
+import { getToken, logOut } from "../lib/api"
 
 function Header() {
     // Not used directly: subscribing to the location re-renders the header on
@@ -8,8 +8,8 @@ function Header() {
     const navigate = useNavigate();
     const loggedIn = getToken() !== null;
 
-    function logOut() {
-        clearToken();
+    async function handleLogOut() {
+        await logOut();
         navigate("/");
     }
 
@@ -20,7 +20,7 @@ function Header() {
                 <Link to="/cart" style={{ marginRight: 16 }}>Cart</Link>
                 {loggedIn && <Link to="/orders" style={{ marginRight: 16 }}>My orders</Link>}
                 {loggedIn
-                    ? <button onClick={logOut}>Log out</button>
+                    ? <button onClick={handleLogOut}>Log out</button>
                     : <Link to="/login">Log in</Link>}
             </nav>
         </header>
