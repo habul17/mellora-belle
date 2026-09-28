@@ -19,13 +19,33 @@ import { OrderRequestError, requestCancellation, requestReturn, cancelOrder, dec
 import { normalizeEmail, isValidEmail, passwordProblem, findUserByEmail, startSession, refreshSession, endSession } from "./lib/auth.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
+import helmet from "helmet"
+import { checkEnv } from "./lib/env.js"
+import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { loginLimits, signupLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
+import { robotsTxt, sitemapXml } from "./lib/seo.js"
+import { audit } from "./lib/audit.js"
 
 
 dotenv.config();
+checkEnv();
+
+// Accept the code before and after the current one too (a 90-second window),
+// so a phone clock a few seconds out doesn't lock the admin out.
+authenticator.options = { window: 1 };
 
 const app = express();
 
+// Render puts exactly one proxy in front of the app. Trusting that one hop
+// makes req.ip the visitor's address (for rate limits); trusting more would
+// let a visitor pick their own address with a fake X-Forwarded-For header.
+app.set("trust proxy", 1);
+
+// Standard security headers (no sniffing, no framing, HSTS, no X-Powered-By).
+app.use(helmet());
+
 app.use(express.json({
+    limit: "100kb",
     // Razorpay signs the exact bytes it sends. Re-stringifying the parsed
     // object would not reliably reproduce them, so keep the original buffer.
     verify: (req, _res, buf) => {
@@ -45,13 +65,20 @@ function fromOurSite(req: express.Request) {
     return req.get("x-requested-with") === "mellora-belle";
 }
 
-app.post("/login", async (req, res) => {
-    const email = normalizeEmail(req.body.email);
-    const { password } = req.body;
-
-    if (!email || typeof password !== "string") {
-        return res.status(400).json({ error: "Enter your email and password" });
+// Every :id in a path is a database id (a cuid, 25 characters). Anything
+// else can't match a row, so it's refused before a query is made.
+app.param("id", (req, res, next, id) => {
+    if (typeof id !== "string" || !/^[a-z0-9]{1,64}$/i.test(id)) {
+        return res.status(404).json({ error: "Not found" });
     }
+    next();
+});
+
+app.post("/login", ...loginLimits, async (req, res) => {
+    const body = readBody(loginBody, req, res);
+    if (!body) return;
+    const email = normalizeEmail(body.email);
+    const { password } = body;
 
     try {
         const user = await findUserByEmail(email);
@@ -67,7 +94,7 @@ app.post("/login", async (req, res) => {
         }
 
         if (user.totpSecret) {
-            const totpCode = req.body.totpCode;
+            const totpCode = body.totpCode;
 
             if (!totpCode) {
                 return res.status(401).json({
@@ -97,9 +124,11 @@ app.post("/login", async (req, res) => {
     }
 })
 
-app.post("/signup", async (req, res) => {
-    const email = normalizeEmail(req.body.email);
-    const { password } = req.body;
+app.post("/signup", signupLimit, async (req, res) => {
+    const body = readBody(signupBody, req, res);
+    if (!body) return;
+    const email = normalizeEmail(body.email);
+    const { password } = body;
 
     if (!isValidEmail(email)) {
         return res.status(400).json({ error: "Enter a valid email address" });
@@ -135,8 +164,10 @@ app.post("/signup", async (req, res) => {
 
 })
 
-app.post("/forgot-password", async (req, res) => {
-    const email = normalizeEmail(req.body.email);
+app.post("/forgot-password", ...forgotPasswordLimits, async (req, res) => {
+    const body = readBody(forgotPasswordBody, req, res);
+    if (!body) return;
+    const email = normalizeEmail(body.email);
 
     try {
         const user = email ? await findUserByEmail(email) : null;
@@ -180,7 +211,7 @@ app.post("/forgot-password", async (req, res) => {
 
 // Trades the httpOnly refresh cookie for a fresh access token, so a customer
 // isn't logged out every 15 minutes.
-app.post("/auth/refresh", async (req, res) => {
+app.post("/auth/refresh", refreshLimit, async (req, res) => {
     if (!fromOurSite(req)) {
         return res.status(403).json({ error: "Forbidden" });
     }
@@ -212,21 +243,31 @@ app.post("/auth/logout", async (req, res) => {
     }
 })
 
+// Whether the admin's login asks for an authenticator code.
+app.get("/admin/2fa", requireAuth, requireAdmin, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { totpSecret: true } });
+    res.json({ enabled: Boolean(user.totpSecret) });
+})
+
+// Step 1 of 2: a new secret to scan. It isn't used for logging in until step 2
+// proves the phone has it, so a failed scan can't lock the admin out. Running
+// this again (a new phone) leaves the current authenticator working until then.
 app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
     const secret = authenticator.generateSecret();
     const userId = (req as any).user.userId;
 
     try {
-
-        await prisma.user.update({
+        const user = await prisma.user.update({
             where: { id: userId },
-            data: { totpSecret: secret }
+            data: { totpPendingSecret: secret }
         });
 
-        const otpauthUrl = authenticator.keyuri(userId, "Mellora Belle", secret);
+        const otpauthUrl = authenticator.keyuri(user.email, "Mellora Belle", secret);
         const qrCodeImage = await QRCode.toDataURL(otpauthUrl);
 
-        res.json({ secret, otpauthUrl, qrCodeImage });
+        await audit(userId, "2fa.setup-started", "User", userId);
+        res.json({ secret, qrCodeImage });
 
     } catch (err) {
         console.log(err);
@@ -236,12 +277,40 @@ app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
     }
 })
 
-app.post("/reset-password", async (req, res) => {
-    const { token, newPassword } = req.body;
+// Step 2 of 2: a code from the newly scanned authenticator switches it on.
+app.post("/admin/2fa/confirm", requireAuth, requireAdmin, async (req, res) => {
+    const userId = (req as any).user.userId;
+    const body = readBody(twoFactorConfirmBody, req, res);
+    if (!body) return;
 
-    if (typeof token !== "string" || !token) {
-        return res.status(400).json({ error: "Invalid or expired token" });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    if (!user.totpPendingSecret) {
+        return res.status(400).json({ error: "Start the set-up again: there's no new authenticator waiting to be confirmed." });
     }
+
+    if (!authenticator.verify({ token: body.code, secret: user.totpPendingSecret })) {
+        return res.status(400).json({ error: "That code didn't match. Type the newest code your app shows, and check your phone's clock is set automatically." });
+    }
+
+    // Compare-and-set, so a second confirm with a stale secret can't win.
+    const switched = await prisma.user.updateMany({
+        where: { id: userId, totpPendingSecret: user.totpPendingSecret },
+        data: { totpSecret: user.totpPendingSecret, totpPendingSecret: null }
+    });
+    if (switched.count === 0) {
+        return res.status(409).json({ error: "The set-up changed while you were confirming it. Please start again." });
+    }
+
+    await audit(userId, "2fa.enabled", "User", userId);
+    res.json({ enabled: true });
+})
+
+app.post("/reset-password", resetPasswordLimit, async (req, res) => {
+    const body = readBody(resetPasswordBody, req, res);
+    if (!body) return;
+    const { token, newPassword } = body;
+
     const problem = passwordProblem(newPassword);
     if (problem) {
         return res.status(400).json({ error: problem });
@@ -297,9 +366,15 @@ app.post("/reset-password", async (req, res) => {
     }
 })
 
+// Only products switched on (isActive) are for sale. One that's switched off
+// disappears from the shop, its page and the sitemap, but old orders keep it.
 app.get("/products", async (req, res) => {
 
-    const getProducts = await prisma.product.findMany({ include: { category: true, variants: true } });
+    const getProducts = await prisma.product.findMany({
+        where: { isActive: true },
+        include: { category: true, variants: true },
+        orderBy: { name: "asc" }
+    });
 
     res.json({
         products: getProducts
@@ -308,10 +383,9 @@ app.get("/products", async (req, res) => {
 
 app.get("/products/:slug", async (req, res) => {
 
-
     const getProduct = await prisma.product.findUnique({ where: { slug: req.params.slug }, include: { category: true, variants: true } });
 
-    if (!getProduct) {
+    if (!getProduct || !getProduct.isActive) {
         return res.status(404).json({
             error: "Product not found"
         })
@@ -322,8 +396,20 @@ app.get("/products/:slug", async (req, res) => {
     })
 })
 
+// The stock page lists every product, including ones switched off.
+app.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
+    const products = await prisma.product.findMany({
+        include: { variants: true },
+        orderBy: { name: "asc" }
+    });
+
+    res.json({ products });
+})
+
 app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => {
-    const stockQuantity = req.body.stockQuantity;
+    const body = readBody(stockBody, req, res);
+    if (!body) return;
+    const { stockQuantity } = body;
     const id = req.params.id;
 
     if (!id || Array.isArray(id)) return res.status(400).json({
@@ -331,10 +417,14 @@ app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => 
     })
 
     try {
+        // The number typed in replaces what's there (last save wins). With one
+        // admin that's the expected behaviour; the audit log keeps the old value.
+        const before = await prisma.variant.findUnique({ where: { id }, select: { stockQuantity: true } });
         const updatedVariant = await prisma.variant.update({
             where: { id },
             data: { stockQuantity }
         });
+        await audit((req as any).user.userId, "stock.set", "Variant", id, { from: before?.stockQuantity ?? null, to: stockQuantity });
         res.json({ variant: updatedVariant });
     } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
@@ -349,7 +439,9 @@ app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => 
 
 app.post("/cart/items", requireAuth, async (req, res) => {
     const userId = (req as any).user.userId;
-    const { variantId, quantity } = req.body;
+    const body = readBody(addToCartBody, req, res);
+    if (!body) return;
+    const { variantId, quantity } = body;
 
     try {
         const cart = await prisma.cart.upsert({
@@ -358,10 +450,10 @@ app.post("/cart/items", requireAuth, async (req, res) => {
             create: { userId }
         })
 
-        const variant = await prisma.variant.findUnique({ where: { id: variantId } });
+        const variant = await prisma.variant.findUnique({ where: { id: variantId }, include: { product: true } });
 
-        if (!variant) {
-            return res.status(404).json({ error: "Variant not found" });
+        if (!variant || !variant.product.isActive) {
+            return res.status(404).json({ error: "Sorry, this item is no longer available" });
         }
 
         const existingItem = await prisma.cartItem.findUnique({
@@ -369,6 +461,10 @@ app.post("/cart/items", requireAuth, async (req, res) => {
         });
 
         const newQuantity = (existingItem?.quantity ?? 0) + quantity;
+
+        if (newQuantity > MAX_PER_ITEM) {
+            return res.status(400).json({ error: `You can order up to ${MAX_PER_ITEM} of each item` });
+        }
 
         if (variant.stockQuantity < newQuantity) {
             return res.status(400).json({ error: "Not enough stock" })
@@ -423,7 +519,9 @@ app.get("/cart", requireAuth, async (req, res) => {
 app.patch("/cart/items/:id", requireAuth, async (req, res) => {
     const userId = (req as any).user.userId;
     const id = req.params.id;
-    const quantity = req.body.quantity;
+    const body = readBody(updateCartItemBody, req, res);
+    if (!body) return;
+    const { quantity } = body;
 
     if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
 
@@ -439,8 +537,10 @@ app.patch("/cart/items/:id", requireAuth, async (req, res) => {
 
         const variant = await prisma.variant.findUnique({ where: { id: cartItem.variantId } });
 
-        if (variant && variant.stockQuantity < quantity) {
-            return res.status(400).json({ error: "Not enough stock" });
+        // Only more needs stock. Going down is always allowed, or a customer
+        // whose size sold down below their quantity couldn't step it back.
+        if (variant && quantity > cartItem.quantity && variant.stockQuantity < quantity) {
+            return res.status(400).json({ error: `Only ${variant.stockQuantity} left in stock` });
         }
 
         const updatedItem = await prisma.cartItem.update({
@@ -483,8 +583,6 @@ app.delete("/cart/items/:id", requireAuth, async (req, res) => {
     }
 });
 
-const PHONE_REGEX = /^[6-9][0-9]{9}$/;
-const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_MINUTES) || 15;
 const CLEANUP_INTERVAL_MINUTES = 1;
 
@@ -502,23 +600,13 @@ function sameContents(
     return key(orderItems) === key(cartItems);
 }
 
-app.post("/checkout", requireAuth, async (req, res) => {
+app.post("/checkout", requireAuth, checkoutLimit, async (req, res) => {
     const userId = (req as any).user.userId;
-    const { fullName, phone, addressLine1, addressLine2, city, state, pincode } = req.body;
+    const body = readBody(checkoutBody, req, res);
+    if (!body) return;
+    const { fullName, phone, addressLine1, addressLine2, city, state, pincode } = body;
 
-    if (!fullName || !addressLine1 || !city || !state) {
-        return res.status(400).json({ error: "Please fill in all address fields" });
-    }
-
-    if (!PHONE_REGEX.test(String(phone))) {
-        return res.status(400).json({ error: "Enter a valid 10-digit phone number" });
-    }
-
-    if (!PINCODE_REGEX.test(String(pincode))) {
-        return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
-    }
-
-    if (!isServiceablePincode(String(pincode))) {
+    if (!isServiceablePincode(pincode)) {
         return res.status(400).json({ error: "Sorry, we don't deliver to this pincode yet" });
     }
 
@@ -589,6 +677,11 @@ app.post("/checkout", requireAuth, async (req, res) => {
             let subtotal = 0;
 
             for (const item of cartItems) {
+                // Switched off after it went into the cart.
+                if (!item.variant.product.isActive) {
+                    throw new Error(`UNAVAILABLE:${item.variant.product.name}`);
+                }
+
                 const reserved = await tx.variant.updateMany({
                     where: { id: item.variantId, stockQuantity: { gte: item.quantity } },
                     data: { stockQuantity: { decrement: item.quantity } }
@@ -633,12 +726,17 @@ app.post("/checkout", requireAuth, async (req, res) => {
                 error: `Sorry, ${err.message.replace("OUT_OF_STOCK:", "")} just went out of stock`
             });
         }
+        if (err instanceof Error && err.message.startsWith("UNAVAILABLE:")) {
+            return res.status(409).json({
+                error: `Sorry, ${err.message.replace("UNAVAILABLE:", "")} is no longer available. Please remove it from your cart.`
+            });
+        }
         console.log(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
 
-app.post("/orders/:id/payment", requireAuth, async (req, res) => {
+app.post("/orders/:id/payment", requireAuth, checkoutLimit, async (req, res) => {
     const userId = (req as any).user.userId;
     const id = req.params.id;
 
@@ -718,7 +816,7 @@ app.post("/orders/:id/payment", requireAuth, async (req, res) => {
 // Called by the browser right after Razorpay's window reports success. The
 // browser's word is never taken for it: if the webhook has not confirmed the
 // payment yet, the backend asks Razorpay itself.
-app.post("/orders/:id/confirm-payment", requireAuth, async (req, res) => {
+app.post("/orders/:id/confirm-payment", requireAuth, checkoutLimit, async (req, res) => {
     const userId = (req as any).user.userId;
     const id = req.params.id;
 
@@ -823,7 +921,9 @@ const TRACKING_FIELD_MAX = 100;
 // Moves an order one step along PAID -> PACKED -> SHIPPED -> DELIVERED.
 app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res) => {
     const id = req.params.id;
-    const { status } = req.body;
+    const body = readBody(orderStatusBody, req, res);
+    if (!body) return;
+    const { status } = body;
 
     if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
 
@@ -836,9 +936,9 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
     let tracking = {};
 
     if (status === "SHIPPED") {
-        const courierName = String(req.body.courierName ?? "").trim();
-        const trackingNumber = String(req.body.trackingNumber ?? "").trim();
-        const trackingUrlInput = String(req.body.trackingUrl ?? "").trim();
+        const courierName = (body.courierName ?? "").trim();
+        const trackingNumber = (body.trackingNumber ?? "").trim();
+        const trackingUrlInput = (body.trackingUrl ?? "").trim();
 
         if (!courierName || !trackingNumber) {
             return res.status(400).json({ error: "Enter the courier name and tracking number" });
@@ -902,6 +1002,9 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
             });
         }
 
+        // Through JSON so the shipped-at date is stored as text.
+        await audit((req as any).user.userId, "order.status", "Order", id, JSON.parse(JSON.stringify({ from, to: status, ...tracking })));
+
         if (status === "SHIPPED") {
             sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
         }
@@ -918,11 +1021,12 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
 
 // Runs one cancellation / return / refund change and answers with the order
 // as it now stands, or with the reason it couldn't be done.
+// For the admin's changes, `admin` names the change for the audit log.
 async function orderRequestRoute(
     req: express.Request,
     res: express.Response,
     change: (id: string) => Promise<void>,
-    admin: boolean
+    admin: false | { action: string; details?: Record<string, string | number | null> }
 ) {
     const id = req.params.id;
 
@@ -932,6 +1036,7 @@ async function orderRequestRoute(
         await change(id);
 
         if (admin) {
+            await audit((req as any).user.userId, admin.action, "Order", id, admin.details ?? {});
             const order = await prisma.order.findUniqueOrThrow({ where: { id }, include: adminOrderViewInclude });
             return res.json({ order: toAdminOrderView(order) });
         }
@@ -948,23 +1053,36 @@ async function orderRequestRoute(
     }
 }
 
-app.post("/orders/:id/cancel", requireAuth, (req, res) =>
-    orderRequestRoute(req, res, (id) => requestCancellation(id, (req as any).user.userId, req.body.reason), false));
+app.post("/orders/:id/cancel", requireAuth, orderRequestLimit, (req, res) => {
+    const body = readBody(cancelRequestBody, req, res);
+    if (!body) return;
+    return orderRequestRoute(req, res, (id) => requestCancellation(id, (req as any).user.userId, body.reason), false);
+});
 
-app.post("/orders/:id/return", requireAuth, (req, res) =>
-    orderRequestRoute(req, res, (id) => requestReturn(id, (req as any).user.userId, req.body.reason, req.body.details), false));
+app.post("/orders/:id/return", requireAuth, orderRequestLimit, (req, res) => {
+    const body = readBody(returnRequestBody, req, res);
+    if (!body) return;
+    return orderRequestRoute(req, res, (id) => requestReturn(id, (req as any).user.userId, body.reason, body.details), false);
+});
 
 app.post("/admin/orders/:id/cancel", requireAuth, requireAdmin, (req, res) =>
-    orderRequestRoute(req, res, (id) => cancelOrder(id), true));
+    orderRequestRoute(req, res, (id) => cancelOrder(id), { action: "order.cancel" }));
 
-app.post("/admin/orders/:id/decline", requireAuth, requireAdmin, (req, res) =>
-    orderRequestRoute(req, res, (id) => declineRequest(id, req.body.note), true));
+app.post("/admin/orders/:id/decline", requireAuth, requireAdmin, (req, res) => {
+    const body = readBody(declineBody, req, res);
+    if (!body) return;
+    return orderRequestRoute(req, res, (id) => declineRequest(id, body.note), { action: "order.decline", details: { note: body.note } });
+});
 
 app.post("/admin/orders/:id/returned", requireAuth, requireAdmin, (req, res) =>
-    orderRequestRoute(req, res, (id) => markReturned(id), true));
+    orderRequestRoute(req, res, (id) => markReturned(id), { action: "order.returned" }));
 
-app.post("/admin/orders/:id/refund", requireAuth, requireAdmin, (req, res) =>
-    orderRequestRoute(req, res, (id) => markRefunded(id, req.body.amount, req.body.reference), true));
+app.post("/admin/orders/:id/refund", requireAuth, requireAdmin, (req, res) => {
+    const body = readBody(refundBody, req, res);
+    if (!body) return;
+    return orderRequestRoute(req, res, (id) => markRefunded(id, body.amount, body.reference),
+        { action: "order.refund", details: { amount: body.amount, reference: body.reference ?? null } });
+});
 
 app.post("/webhooks/razorpay", async (req, res) => {
     const signature = req.headers["x-razorpay-signature"];
@@ -994,12 +1112,20 @@ app.post("/webhooks/razorpay", async (req, res) => {
         return res.status(400).json({ error: "Invalid signature" });
     }
 
-    const event = req.body.event;
-    const entity = req.body.payload?.payment?.entity;
+    // Signed by Razorpay, but still checked for shape: a payload we can't read
+    // is logged and acknowledged rather than crashing on a missing field.
+    const parsed = razorpayWebhookBody.safeParse(req.body);
+    if (!parsed.success) {
+        console.log("Webhook payload in an unexpected shape", JSON.stringify(req.body).slice(0, 500));
+        return res.json({ received: true });
+    }
+
+    const event = parsed.data.event;
+    const entity = parsed.data.payload?.payment?.entity;
 
     // Anything we do not handle is still a success as far as Razorpay is
     // concerned. Answering with an error would make it retry forever.
-    if (event !== "payment.captured" && event !== "payment.failed") {
+    if ((event !== "payment.captured" && event !== "payment.failed") || !entity) {
         return res.json({ received: true });
     }
 
@@ -1048,6 +1174,44 @@ app.get("/health", (req, res) => {
         status: "ok"
     })
 })
+
+// Served on the shop's own domain through Vercel rewrites (frontend/vercel.json),
+// built here because only the backend knows which products are for sale.
+app.get("/robots.txt", (req, res) => {
+    res.type("text/plain").send(robotsTxt());
+})
+
+app.get("/sitemap.xml", async (req, res) => {
+    res.type("application/xml").send(await sitemapXml());
+})
+
+// Anything no route above matched.
+app.use((req, res) => {
+    res.status(404).json({ error: "Not found" });
+});
+
+// The one place errors end up: anything a route didn't catch itself, and
+// Express 5 sends every rejected async handler here too. The details go to
+// the logs; the visitor only ever sees a plain message, never a stack trace.
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const type = (err as { type?: string })?.type;
+
+    if (type === "entity.parse.failed") {
+        return res.status(400).json({ error: "The request body isn't valid JSON" });
+    }
+    if (type === "entity.too.large") {
+        return res.status(413).json({ error: "The request is too large" });
+    }
+
+    console.error(`${req.method} ${req.path} failed:`, err);
+
+    if (res.headersSent) return next(err);
+    res.status(500).json({ error: "Something went wrong" });
+});
+
+process.on("unhandledRejection", (reason) => {
+    console.error("Unhandled promise rejection:", reason);
+});
 
 
 setInterval(() => {
