@@ -21,12 +21,14 @@ import { authenticator } from "otplib"
 import QRCode from "qrcode"
 import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
-import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
 import { loginLimits, signupLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { robotsTxt, sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
 import { shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
+import { ProductAdminError, createProduct, updateProduct, addSize, listAdminProducts } from "./lib/productAdmin.js"
+import { siteOrigins, siteUrl } from "./lib/site.js"
 
 
 dotenv.config();
@@ -56,8 +58,8 @@ app.use(express.json({
 }));
 
 // credentials: the browser may send and receive the refresh cookie, but only
-// for FRONTEND_URL.
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }))
+// for the shop's own address(es) in FRONTEND_URL.
+app.use(cors({ origin: siteOrigins(), credentials: true }))
 
 // The refresh cookie goes along with any request to /auth, even one another
 // site triggers. A custom header can't be added cross-site without a CORS
@@ -189,7 +191,7 @@ app.post("/forgot-password", ...forgotPasswordLimits, async (req, res) => {
             }
         })
 
-        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+        const resetLink = `${siteUrl()}/reset-password?token=${rawToken}`;
 
         try {
             await sendEmail(
@@ -398,14 +400,69 @@ app.get("/products/:slug", async (req, res) => {
     })
 })
 
-// The stock page lists every product, including ones switched off.
+// The Stock and Products pages list every product, including ones switched off.
 app.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
-    const products = await prisma.product.findMany({
-        include: { variants: true },
-        orderBy: { name: "asc" }
-    });
+    const [products, categories] = await listAdminProducts();
+    res.json({ products, categories });
+})
 
-    res.json({ products });
+// The Products page's saves: known problems go back as a message to show.
+function productAdminFailed(res: express.Response, err: unknown) {
+    if (err instanceof ProductAdminError) {
+        return res.status(err.httpStatus).json({ error: err.message });
+    }
+    console.log(err);
+    res.status(500).json({ error: "Something went wrong" });
+}
+
+app.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
+    const body = readBody(newProductBody, req, res);
+    if (!body) return;
+
+    try {
+        const product = await createProduct(body);
+        await audit((req as any).user.userId, "product.create", "Product", product.id, {
+            name: product.name, basePrice: product.basePrice, isActive: product.isActive,
+            sizes: body.sizes.map((s) => `${s.size}:${s.stockQuantity}`),
+        });
+        res.status(201).json({ product });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
+})
+
+app.patch("/admin/products/:id", requireAuth, requireAdmin, async (req, res) => {
+    const body = readBody(productBody, req, res);
+    if (!body) return;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const { product, changes } = await updateProduct(id, body);
+        if (Object.keys(changes).length > 0) {
+            await audit((req as any).user.userId, "product.update", "Product", id, changes as Prisma.InputJsonValue);
+        }
+        res.json({ product });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
+})
+
+app.post("/admin/products/:id/sizes", requireAuth, requireAdmin, async (req, res) => {
+    const body = readBody(addSizeBody, req, res);
+    if (!body) return;
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const variant = await addSize(id, body.size, body.stockQuantity);
+        await audit((req as any).user.userId, "product.size.add", "Product", id, { size: variant.size, sku: variant.sku, stockQuantity: variant.stockQuantity });
+        res.status(201).json({ variant });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
 })
 
 app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => {

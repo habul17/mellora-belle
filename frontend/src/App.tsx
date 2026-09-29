@@ -3,6 +3,7 @@ import Home from "./pages/Home"
 import ProductList from "./pages/ProductList"
 import ProductDetail from "./pages/ProductDetail"
 import AdminStock from "./pages/AdminStock"
+import AdminProducts from "./pages/AdminProducts"
 import Login from "./pages/Login"
 import Signup from "./pages/Signup"
 import ForgotPassword from "./pages/ForgotPassword"
@@ -36,6 +37,7 @@ function App() {
           <Route path="/shop" element={<ProductList />} />
           <Route path="/products/:slug" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminStock />} />
+          <Route path="/admin/products" element={<AdminProducts />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

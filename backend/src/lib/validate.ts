@@ -73,10 +73,52 @@ export const addToCartBody = z.object({
 
 export const updateCartItemBody = z.object({ quantity });
 
-export const stockBody = z.object({
-    stockQuantity: z.number({ error: "Stock must be a whole number" })
-        .int("Stock must be a whole number").min(0, "Stock can't be negative").max(100_000, "That's more stock than the shop can hold"),
-});
+const stockQuantity = z.number({ error: "Stock must be a whole number" })
+    .int("Stock must be a whole number").min(0, "Stock can't be negative").max(100_000, "That's more stock than the shop can hold");
+
+export const stockBody = z.object({ stockQuantity });
+
+// ---- Products (admin) ----
+
+const rupees = (message: string) =>
+    z.number({ error: message }).int(message).min(1, message).max(1_000_000, "That price is too high");
+
+// A photo already uploaded to Cloudinary: its image link, which the shop asks
+// for in smaller sizes. A link to a Cloudinary page (not the image) won't do.
+const PHOTO_LINK = "Each photo must be a Cloudinary image link (https://res.cloudinary.com/…/image/upload/…)";
+const photoLink = z.string({ error: PHOTO_LINK }).trim().max(500, PHOTO_LINK)
+    .regex(/^https:\/\/res\.cloudinary\.com\/[^/\s]+\/image\/upload\/\S+$/, PHOTO_LINK);
+
+const size = z.enum(["S", "M", "L", "XL", "XXL"], { error: "Choose a size (S, M, L, XL or XXL)" });
+
+const productDetails = {
+    name: text("Enter the product name", 100, "The name must be under 100 characters"),
+    description: text("Write a description", 5000, "The description must be under 5000 characters"),
+    basePrice: rupees("Enter the price in whole rupees"),
+    compareAtPrice: rupees("Enter the original price in whole rupees, or leave it blank").nullable(),
+    weight: z.number({ error: "Enter the packed weight in grams" })
+        .int("Enter the packed weight in grams").min(1, "Enter the packed weight in grams").max(30_000, "Use a weight under 30 kg (30000 grams)"),
+    color: text("Enter the colour", 50, "The colour must be under 50 characters"),
+    images: z.array(photoLink, { error: "Add at least one photo" }).min(1, "Add at least one photo").max(12, "Use at most 12 photos"),
+    isActive: z.boolean({ error: "Choose whether it's on sale" }),
+};
+
+// The crossed-out price only makes sense above the real one.
+const originalAbovePrice = [
+    (d: { basePrice: number; compareAtPrice: number | null }) => d.compareAtPrice === null || d.compareAtPrice > d.basePrice,
+    { message: "The original price must be higher than the price (or leave it blank)" },
+] as const;
+
+export const productBody = z.object(productDetails).refine(...originalAbovePrice);
+
+export const newProductBody = z.object({
+    ...productDetails,
+    categoryId: text("Choose a category", 64, "Choose a category"),
+    sizes: z.array(z.object({ size, stockQuantity }), { error: "Give the stock for at least one size" })
+        .min(1, "Give the stock for at least one size").max(5, "Each size can only be added once"),
+}).refine(...originalAbovePrice);
+
+export const addSizeBody = z.object({ size, stockQuantity });
 
 // ---- Checkout ----
 
