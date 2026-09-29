@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken"
 import crypto from "node:crypto"
 import type { Request, Response } from "express"
 import { prisma } from "./prisma.js"
+import { siteUrl } from "./site.js"
 
 // Two tokens:
 // - access token: a 15-minute JWT the page sends as a Bearer header.
@@ -73,7 +74,7 @@ function sessionExpiry(role: string) {
 // Partitioned so browsers that block third-party cookies still keep it for
 // this one site. Locally both are on localhost over http.
 function cookieOptions(expires: Date) {
-    const crossSite = (process.env.FRONTEND_URL ?? "").startsWith("https://");
+    const crossSite = siteUrl().startsWith("https://");
     return {
         httpOnly: true,
         path: COOKIE_PATH,

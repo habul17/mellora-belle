@@ -1,10 +1,5 @@
 import { prisma } from "./prisma.js"
-
-// The shop's public address (Vercel now, the real domain later): the same
-// setting CORS and the emails use, so switching domains is one change.
-function siteUrl() {
-    return (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/+$/, "");
-}
+import { siteUrl } from "./site.js"
 
 // Pages that are for one person (their cart, orders, account) or for the
 // admin are kept out of search results.

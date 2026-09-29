@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js"
 import { sendEmail } from "./email.js"
 import { store } from "./store.js"
+import { siteUrl } from "./site.js"
 import type { OrderEmailKind } from "../generated/prisma/enums.js"
 
 // Every order email is a row in OrderEmail, written in the same transaction
@@ -38,10 +39,6 @@ function escapeHtml(text: string) {
 
 function rupees(amount: number) {
     return `₹${amount.toLocaleString("en-IN")}`;
-}
-
-function siteUrl() {
-    return process.env.FRONTEND_URL || "http://localhost:5173";
 }
 
 function orderLink(order: EmailOrder) {
