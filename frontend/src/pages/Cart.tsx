@@ -9,6 +9,7 @@ import { sized } from "../lib/images"
 import { usePageTitle } from "../lib/usePageTitle"
 import { Button, ButtonLink, Container, EmptyState, ErrorState, Notice, PageHeader, PageLoading } from "../components/ui"
 import { BagIcon } from "../components/icons"
+import { MergeNotice } from "../components/MergeNotice"
 
 type CartLine = {
     id: string;
@@ -142,6 +143,7 @@ function Cart() {
         return (
             <EmptyState title="Your cart is empty" icon={<BagIcon width={40} height={40} />}
                 action={<ButtonLink to="/shop">Shop the collection</ButtonLink>}>
+                <MergeNotice className="mb-4 text-left" />
                 <p>Once you add something, it'll wait for you here.</p>
             </EmptyState>
         );
@@ -155,6 +157,8 @@ function Cart() {
         <main>
             <Container className="pt-12 sm:pt-16">
                 <PageHeader title="Your cart" />
+
+                <MergeNotice className="mb-6" />
 
                 {message && <Notice tone="error" className="mb-6">{message}</Notice>}
 

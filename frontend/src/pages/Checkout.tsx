@@ -14,6 +14,7 @@ import type { OrderView } from "../lib/orders"
 import { returns } from "../lib/business"
 import { inputClass, linkClass } from "../lib/styles"
 import { Button, ButtonLink, Container, EmptyState, ErrorState, Field, Notice, PageHeader, PageLoading, Spinner } from "../components/ui"
+import { MergeNotice } from "../components/MergeNotice"
 import { CheckIcon, LockIcon } from "../components/icons"
 
 type Order = {
@@ -253,6 +254,7 @@ function Checkout() {
     if (lines.length === 0 && !order) {
         return (
             <EmptyState title="Your cart is empty" action={<ButtonLink to="/shop">Shop the collection</ButtonLink>}>
+                <MergeNotice className="mb-4 text-left" />
                 <p>Add something to your cart before checking out.</p>
             </EmptyState>
         );
@@ -318,6 +320,8 @@ function Checkout() {
             <Container className="pt-12 sm:pt-16">
                 <Steps current={1} />
                 <PageHeader title="Shipping address" />
+
+                <MergeNotice className="mb-6" />
 
                 <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-16">
                     <form onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
