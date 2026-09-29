@@ -1,6 +1,13 @@
 import { prisma } from "../src/lib/prisma.js";
 
 async function main() {
+    // The seed starts the catalog over, so it only runs on a shop nobody has
+    // ordered from. The live shop's products are edited on the admin Products page.
+    if (await prisma.order.count() > 0) {
+        throw new Error("This database has orders, so the seed won't wipe its products. Use the admin Products page instead.");
+    }
+
+    await prisma.cartItem.deleteMany();
     await prisma.variant.deleteMany();
     await prisma.product.deleteMany();
     await prisma.category.deleteMany();
