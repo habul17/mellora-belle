@@ -63,7 +63,8 @@ enum Role {
 model User {
   id            String               @id @default(cuid())
   email         String               @unique
-  passwordHash  String
+  // Only the admin has a password. Customers log in with an emailed code.
+  passwordHash  String?
   role          Role                 @default(CUSTOMER)
   createdAt     DateTime             @default(now())
   resetTokens   PasswordResetToken[]
@@ -109,6 +110,21 @@ model RefreshToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// A 6-digit code emailed to a customer to log in (or to create their
+// account, the first time). Keyed by email, since the account may not exist
+// yet. Only a keyed hash is stored. Only the newest code for an email works,
+// for 10 minutes, once; 5 wrong tries use it up.
+model LoginCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 
 model PasswordResetToken {

@@ -38,9 +38,13 @@ export const loginBody = z.object({
     totpCode: z.string({ error: "Invalid 2FA code" }).trim().max(10, "Invalid 2FA code").optional(),
 });
 
-export const signupBody = z.object({
-    email: z.string({ error: "Enter a valid email address" }).max(EMAIL_MAX, "Enter a valid email address"),
-    password: z.string({ error: "Choose a password of at least 8 characters" }).max(PASSWORD_INPUT_MAX, "Use at most 72 characters"),
+export const loginCodeBody = z.object({
+    email: z.string({ error: "Enter your email" }).max(EMAIL_MAX, "Enter a valid email address"),
+});
+
+export const verifyLoginCodeBody = z.object({
+    email: z.string({ error: "Enter your email" }).max(EMAIL_MAX, "Enter a valid email address"),
+    code: z.string({ error: "Type the 6-digit code from the email" }).trim().regex(/^\d{6}$/, "Type the 6-digit code from the email"),
 });
 
 export const forgotPasswordBody = z.object({

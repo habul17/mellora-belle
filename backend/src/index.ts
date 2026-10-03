@@ -17,12 +17,13 @@ import { orderViewInclude, adminOrderViewInclude, toOrderView, toAdminOrderView 
 import { statusBefore, describeStatus } from "./lib/orderStatus.js"
 import { OrderRequestError, requestCancellation, requestReturn, cancelOrder, declineRequest, markReturned, markRefunded } from "./lib/orderRequests.js"
 import { normalizeEmail, isValidEmail, passwordProblem, findUserByEmail, startSession, refreshSession, endSession } from "./lib/auth.js"
+import { LoginCodeError, sendLoginCode, verifyLoginCode } from "./lib/loginCodes.js"
 import { authenticator } from "otplib"
 import QRCode from "qrcode"
 import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
-import { readBody, twoFactorConfirmBody, loginBody, signupBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
-import { loginLimits, signupLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
+import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { loginLimits, loginCodeLimits, verifyLoginCodeLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { robotsTxt, sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
 import { shiprocketEnabled } from "./lib/shiprocket.js"
@@ -78,6 +79,8 @@ app.param("id", (req, res, next, id) => {
     next();
 });
 
+// Password login, for the admin only (with the authenticator code once 2FA is
+// on). Customers log in with an emailed code instead, below.
 app.post("/login", ...loginLimits, async (req, res) => {
     const body = readBody(loginBody, req, res);
     if (!body) return;
@@ -87,7 +90,7 @@ app.post("/login", ...loginLimits, async (req, res) => {
     try {
         const user = await findUserByEmail(email);
 
-        if (!user) {
+        if (!user || user.role !== "ADMIN" || !user.passwordHash) {
             return res.status(401).json({ error: "Invalid email or password" })
         }
 
@@ -128,44 +131,47 @@ app.post("/login", ...loginLimits, async (req, res) => {
     }
 })
 
-app.post("/signup", signupLimit, async (req, res) => {
-    const body = readBody(signupBody, req, res);
+// Customer login, step 1 of 2: email a 6-digit code. Any valid email gets
+// one, account or not, so this can't be used to find out who shops here.
+app.post("/login-code", ...loginCodeLimits, async (req, res) => {
+    const body = readBody(loginCodeBody, req, res);
     if (!body) return;
     const email = normalizeEmail(body.email);
-    const { password } = body;
 
     if (!isValidEmail(email)) {
         return res.status(400).json({ error: "Enter a valid email address" });
     }
-    const problem = passwordProblem(password);
-    if (problem) {
-        return res.status(400).json({ error: problem });
-    }
 
     try {
-        // Accounts made before emails were lowercased could differ only in
-        // case, which the unique index wouldn't catch.
-        if (await findUserByEmail(email)) {
-            return res.status(409).json({ error: "An account with this email already exists" })
+        await sendLoginCode(email);
+        res.json({ message: "Code sent" });
+    } catch (err) {
+        if (err instanceof LoginCodeError) {
+            return res.status(err.httpStatus).json({ error: err.message });
         }
+        console.log(err);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+})
 
-        const passwordHash = await bcrypt.hash(password, 10);
+// Step 2 of 2: the code logs the customer in, and the first time it also
+// creates their account, so a new customer carries straight on to checkout.
+app.post("/login-code/verify", verifyLoginCodeLimit, async (req, res) => {
+    const body = readBody(verifyLoginCodeBody, req, res);
+    if (!body) return;
+    const email = normalizeEmail(body.email);
 
-        const user = await prisma.user.create({
-            data: { email, passwordHash },
-        });
-
-        // Logged in straight away, so a new customer carries on to checkout.
+    try {
+        const user = await verifyLoginCode(email, body.code);
         const accessToken = await startSession(res, user);
         res.json({ accessToken });
     } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            return res.status(409).json({ error: "An account with this email already exists" })
+        if (err instanceof LoginCodeError) {
+            return res.status(err.httpStatus).json({ error: err.message });
         }
         console.log(err);
-        res.status(500).json({ error: "Something went wrong" })
+        res.status(500).json({ error: "Something went wrong" });
     }
-
 })
 
 app.post("/forgot-password", ...forgotPasswordLimits, async (req, res) => {
@@ -176,7 +182,8 @@ app.post("/forgot-password", ...forgotPasswordLimits, async (req, res) => {
     try {
         const user = email ? await findUserByEmail(email) : null;
 
-        if (!user) {
+        // Only the admin has a password to reset.
+        if (!user || user.role !== "ADMIN") {
             return res.json({ message: "If that email exists, a reset link has been sent" });
         }
 

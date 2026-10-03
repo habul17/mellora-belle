@@ -3,7 +3,7 @@ import { siteUrl } from "./site.js"
 
 // Pages that are for one person (their cart, orders, account) or for the
 // admin are kept out of search results.
-const PRIVATE_PATHS = ["/admin", "/cart", "/checkout", "/orders", "/login", "/signup", "/forgot-password", "/reset-password"];
+const PRIVATE_PATHS = ["/admin", "/cart", "/checkout", "/orders", "/login", "/forgot-password", "/reset-password"];
 
 export function robotsTxt() {
     return [

@@ -51,6 +51,8 @@ try {
             prisma.cart.deleteMany({ where: { userId: { in: customerIds } } }),
             prisma.refreshToken.deleteMany({ where: { userId: { in: customerIds } } }),
             prisma.passwordResetToken.deleteMany({ where: { userId: { in: customerIds } } }),
+            // Only customers get login codes, and every one so far was a test.
+            prisma.loginCode.deleteMany({}),
             prisma.user.deleteMany({ where: { id: { in: customerIds } } }),
             // The first real order is #1001, as the numbering was set up for.
             prisma.$executeRawUnsafe(`ALTER SEQUENCE "Order_number_seq" RESTART WITH 1001`),
