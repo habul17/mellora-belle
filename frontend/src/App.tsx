@@ -5,7 +5,7 @@ import ProductDetail from "./pages/ProductDetail"
 import AdminStock from "./pages/AdminStock"
 import AdminProducts from "./pages/AdminProducts"
 import Login from "./pages/Login"
-import Signup from "./pages/Signup"
+import AdminLogin from "./pages/AdminLogin"
 import ForgotPassword from "./pages/ForgotPassword"
 import ResetPassword from "./pages/ResetPassword"
 import Cart from "./pages/Cart"
@@ -39,7 +39,6 @@ function App() {
           <Route path="/admin" element={<AdminStock />} />
           <Route path="/admin/products" element={<AdminProducts />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/cart" element={<Cart />} />
@@ -48,6 +47,7 @@ function App() {
           <Route path="/orders/:id" element={<OrderDetail />} />
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/security" element={<AdminSecurity />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/shipping" element={<Shipping />} />
           <Route path="/refunds" element={<Refunds />} />

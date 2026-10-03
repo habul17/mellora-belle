@@ -21,8 +21,8 @@ function Privacy() {
                 <h2>What we collect</h2>
                 <ul>
                     <li>
-                        <strong>Your account:</strong> your email address and password. We store
-                        only a scrambled (hashed) version of your password, never the password itself.
+                        <strong>Your account:</strong> your email address. You log in with a one-time
+                        code we email you, so there's no password to store.
                     </li>
                     <li>
                         <strong>Your orders:</strong> your name, phone number and delivery address,

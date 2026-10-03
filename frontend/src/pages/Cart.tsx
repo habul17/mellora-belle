@@ -233,7 +233,7 @@ function Cart() {
                             <ButtonLink to="/checkout" className="mt-6 w-full">Checkout</ButtonLink>
                         )}
                         {!getToken() && (
-                            <p className="mt-3 text-center text-xs text-muted">You'll log in or create an account next.</p>
+                            <p className="mt-3 text-center text-xs text-muted">Next, you'll log in with a code we email you.</p>
                         )}
                         <p className="mt-4 text-center">
                             <Link to="/shop" className="text-xs tracking-[0.14em] uppercase underline-offset-4 hover:underline">Continue shopping</Link>

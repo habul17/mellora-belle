@@ -8,7 +8,7 @@ import { inputClass, linkClass } from "../lib/styles"
 import { usePageTitle } from "../lib/usePageTitle"
 
 function ForgotPassword() {
-    usePageTitle("Reset your password");
+    usePageTitle("Reset the admin password");
     const [email, setEmail] = useState("");
     const [sent, setSent] = useState(false);
     const [message, setMessage] = useState("");
@@ -47,22 +47,22 @@ function ForgotPassword() {
         return (
             <AccountShell title="Check your email" intro={
                 <p>
-                    If there's an account for {email}, we've sent it a link to reset your
-                    password. The link works for 15 minutes.
+                    If {email} is the admin account's email, we've sent it a link to reset
+                    the password. The link works for 15 minutes.
                 </p>
             }>
                 <p className="text-center text-sm text-muted">
                     Nothing arrived? Check your spam folder, or{" "}
                     <button type="button" onClick={() => setSent(false)} className={`text-ink ${linkClass}`}>try again</button>.
                 </p>
-                <p className="text-center text-sm"><Link to="/login" className={linkClass}>Back to log in</Link></p>
+                <p className="text-center text-sm"><Link to="/admin/login" className={linkClass}>Back to log in</Link></p>
             </AccountShell>
         );
     }
 
     return (
-        <AccountShell title="Reset your password"
-            intro={<p>Enter the email you signed up with and we'll send you a link to set a new password.</p>}>
+        <AccountShell title="Reset the admin password"
+            intro={<p>Only the shop's admin has a password. Customers log in with a code we email them.</p>}>
             <form onSubmit={handleSubmit} className="space-y-5">
                 <Field label="Email">
                     <input type="email" autoComplete="email" required className={inputClass}
@@ -76,7 +76,7 @@ function ForgotPassword() {
                 </Button>
             </form>
 
-            <p className="text-center text-sm"><Link to="/login" className={linkClass}>Back to log in</Link></p>
+            <p className="text-center text-sm"><Link to="/admin/login" className={linkClass}>Back to log in</Link></p>
         </AccountShell>
     );
 }

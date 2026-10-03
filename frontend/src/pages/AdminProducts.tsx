@@ -182,7 +182,7 @@ function AdminProducts() {
             .catch(() => setError("Could not reach the server"));
     }, [token]);
 
-    if (!token) return <Navigate to="/login?from=/admin/products" replace />;
+    if (!token) return <Navigate to="/admin/login?from=/admin/products" replace />;
     if (error) return <div className="admin">{error}</div>;
     if (!products) return <div className="admin">Loading...</div>;
 

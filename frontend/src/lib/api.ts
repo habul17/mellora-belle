@@ -105,7 +105,8 @@ export async function authFetch(path: string, options: RequestInit = {}) {
         clearToken();
 
         const from = window.location.pathname;
-        window.location.href = `/login?expired=1&from=${encodeURIComponent(from)}`;
+        const loginPage = from.startsWith("/admin") ? "/admin/login" : "/login";
+        window.location.href = `${loginPage}?expired=1&from=${encodeURIComponent(from)}`;
 
         // The browser is navigating away. Never resolve, so the caller does
         // not carry on rendering an error the user will never get to read.

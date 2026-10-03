@@ -164,7 +164,7 @@ function AdminOrders() {
     }, [underWay, orders]);
 
     if (!token) {
-        return <Navigate to="/login?from=/admin/orders" replace />;
+        return <Navigate to="/admin/login?from=/admin/orders" replace />;
     }
 
     if (error) return <div className="admin">{error}</div>;

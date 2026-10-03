@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Container } from "./ui"
 
-// The narrow, centred frame shared by log in, sign up and password reset.
+// The narrow, centred frame shared by the log in and password reset pages.
 function AccountShell({ title, intro, children }: { title: string; intro?: ReactNode; children: ReactNode }) {
     return (
         <main>

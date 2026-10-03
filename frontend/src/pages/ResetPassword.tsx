@@ -75,7 +75,7 @@ function ResetPassword() {
     if (done) {
         return (
             <AccountShell title="Password changed" intro={<p>You can now log in with your new password.</p>}>
-                <ButtonLink to="/login" className="w-full">Log in</ButtonLink>
+                <ButtonLink to="/admin/login" className="w-full">Log in</ButtonLink>
             </AccountShell>
         );
     }

@@ -12,12 +12,7 @@ export function safeRedirect(from: string | null) {
     return from;
 }
 
-// Keeps the ?from= target when moving between login, signup and back.
-export function withFrom(path: string, from: string | null) {
-    return from ? `${path}?from=${encodeURIComponent(from)}` : path;
-}
-
-// Used by both login and signup.
+// Used by both the customer and the admin login.
 export async function finishLogin(accessToken: string) {
     saveToken(accessToken);
     await mergeGuestCart(accessToken);

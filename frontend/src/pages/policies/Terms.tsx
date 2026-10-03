@@ -29,8 +29,9 @@ function Terms() {
             <section>
                 <h2>Your account</h2>
                 <p>
-                    Please give accurate details and keep your password to yourself. You're
-                    responsible for orders placed from your account.
+                    Please give accurate details and keep your email account secure: anyone who
+                    can read your email can log in to your account. You're responsible for
+                    orders placed from your account.
                 </p>
             </section>
 
