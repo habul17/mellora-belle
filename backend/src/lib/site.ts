@@ -2,7 +2,7 @@
 // by commas: the first is the main one (emails, password links, the sitemap),
 // and every one of them may call the API. That keeps the old vercel.app
 // address working while the real domain takes over, e.g.
-//   FRONTEND_URL=https://mellorabelle.com,https://mellora-belle.vercel.app
+//   FRONTEND_URL=https://www.mellorabelle.com,https://mellora-belle.vercel.app
 export function siteOrigins() {
     const listed = (process.env.FRONTEND_URL ?? "")
         .split(",")

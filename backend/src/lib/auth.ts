@@ -69,10 +69,11 @@ function sessionExpiry(role: string) {
         : new Date(Date.now() + CUSTOMER_SESSION_DAYS * 24 * 60 * 60 * 1000);
 }
 
-// Production: the site (vercel.app) and the API (onrender.com) are different
-// sites, so the cookie must be SameSite=None + Secure to be sent at all, and
-// Partitioned so browsers that block third-party cookies still keep it for
-// this one site. Locally both are on localhost over http.
+// Production: the shop (www.mellorabelle.com) and the API (api.mellorabelle.com)
+// are the same site, so the cookie is first-party there. The old vercel.app
+// address still works and is a different site, so the cookie must be
+// SameSite=None + Secure to be sent at all, and Partitioned so browsers that
+// block third-party cookies still keep it. Locally both are on localhost over http.
 function cookieOptions(expires: Date) {
     const crossSite = siteUrl().startsWith("https://");
     return {
