@@ -9,9 +9,9 @@ export const business = {
     email: "mellorabelle.in@gmail.com",
     phone: "+91 99444 24576",
     phoneHref: "tel:+919944424576",
-    // Full postal address. Leave empty until it's decided; the Contact page falls back
-    // to the city. It MUST be filled in before the Razorpay KYC is submitted.
-    address: "",
+    // Full postal address, shown on the Contact page. Razorpay's KYC checks it
+    // matches the one on the application.
+    address: "477, Selvanilayam, Puliyakulam Road, Ramanathapuram, Coimbatore, Tamil Nadu 641045",
     city: "Coimbatore, Tamil Nadu",
     jurisdiction: "Coimbatore, Tamil Nadu",
     grievanceOfficer: {
