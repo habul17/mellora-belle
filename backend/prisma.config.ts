@@ -9,6 +9,10 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Migrations hold a database lock while they run. Neon's pooled address
+    // ("-pooler" in the host) can send the unlock down a different
+    // connection, leaving the lock behind, and the next deploy then fails
+    // with P1002. So migrations use the direct address; the app stays pooled.
+    url: process.env["DATABASE_URL"]?.replace("-pooler.", "."),
   },
 });
