@@ -4,7 +4,7 @@ import { Link, Navigate, useParams } from "react-router-dom"
 import { getToken, authFetch } from "../lib/api"
 import { ORDER_STEPS, RETURN_REASONS, formatDate, formatDateTime, soldOutBeforePayment } from "../lib/orders"
 import type { OrderView } from "../lib/orders"
-import { returns } from "../lib/business"
+import { business, returns } from "../lib/business"
 import { formatPrice } from "../lib/format"
 import { sized } from "../lib/images"
 import { usePageTitle } from "../lib/usePageTitle"
@@ -162,6 +162,9 @@ function OrderOutcome({ order }: { order: OrderView }) {
         ? <p>We refunded {formatPrice(order.refundAmount ?? 0)} on {formatDate(order.refundedAt)} to your original payment
             method{order.refundReference && <> (reference {order.refundReference})</>}. Banks can take
             {" "}{returns.refundDays} to show it.</p>
+        : order.refundNeeded && order.status === "RETURNED"
+            ? <p>We'll send you a replacement, or, if it's out of stock, refund you to your original payment
+                method within {returns.refundDays}. We'll be in touch.</p>
         : order.refundNeeded
             ? <p>We'll refund you to your original payment method within {returns.refundDays}, and email you when it's done.</p>
             : null;
@@ -190,12 +193,15 @@ function OrderOutcome({ order }: { order: OrderView }) {
             )}
             {order.status === "RETURN_REQUESTED" && order.returnRequestedAt && (
                 <p>
-                    You asked to return this order on {formatDate(order.returnRequestedAt)}. We'll email
-                    you with how to send it back.
+                    You asked to return this order on {formatDate(order.returnRequestedAt)}. If you
+                    haven't yet, email photos or an unboxing video
+                    to <a href={`mailto:${business.email}`} className={linkClass}>{business.email}</a> with
+                    your order number. We'll be in touch about sending it back.
                 </p>
             )}
             {order.status === "CANCELLED" && order.cancelledAt && <p>This order was cancelled on {formatDate(order.cancelledAt)}.</p>}
             {order.status === "RETURNED" && order.returnedAt && <p>We received your return on {formatDate(order.returnedAt)}.</p>}
+            {order.replacementSentAt && <p>We sent you a replacement on {formatDate(order.replacementSentAt)}.</p>}
             {declined && <p>We couldn't accept your request: {order.requestDeclineNote}</p>}
             {refund}
         </Notice>
@@ -265,8 +271,10 @@ function ReturnForm({ order, onChange }: FormProps) {
     return (
         <Card title="Return this order">
             <p className="text-muted">
-                You can ask for a return until {formatDate(order.returnUntil!)}. Items must be unworn
-                and unwashed, with their tags attached. See our <Link to="/refunds" className={linkClass}>returns policy</Link>.
+                If your item arrived damaged or defective, or we sent the wrong item or size, you can
+                ask for a return until {formatDate(order.returnUntil!)}. We'll send a replacement, or
+                refund you if it's out of stock. We don't take returns for a change of mind or the
+                wrong size ordered. See our <Link to="/refunds" className={linkClass}>returns policy</Link>.
             </p>
             <Field label="Reason" className="mt-4">
                 <select value={reason} className={inputClass} onChange={(e) => setReason(e.target.value)}>
@@ -274,9 +282,13 @@ function ReturnForm({ order, onChange }: FormProps) {
                     {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
             </Field>
-            <Field label="Anything we should know? (optional)" className="mt-4">
+            <Field label="What's wrong with it? (optional)" className="mt-4">
                 <textarea value={details} maxLength={500} rows={3} className={inputClass} onChange={(e) => setDetails(e.target.value)} />
             </Field>
+            <p className="mt-4 text-muted">
+                Then email photos or an unboxing video
+                to <a href={`mailto:${business.email}`} className={linkClass}>{business.email}</a> with your order number.
+            </p>
             <Button variant="secondary" className="mt-4" onClick={submit} disabled={busy}>{busy ? "Sending…" : "Request a return"}</Button>
             {message && <Notice tone="error" className="mt-4">{message}</Notice>}
         </Card>

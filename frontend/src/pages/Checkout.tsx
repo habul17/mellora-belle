@@ -296,6 +296,7 @@ function Checkout() {
                             <p className="text-sm leading-relaxed text-muted">
                                 By paying you agree to our <Link to="/terms" className={linkClass}>terms</Link>.
                                 You can cancel within {returns.cancelWindow} of paying for a full refund.
+                                We only take returns of damaged, defective or wrong items.
                             </p>
                         </div>
 

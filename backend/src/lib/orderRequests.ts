@@ -14,7 +14,9 @@ export class OrderRequestError extends Error {
     }
 }
 
-export const RETURN_REASONS = ["Damaged or defective", "Wrong item sent", "Doesn't fit", "Changed my mind"];
+// Only faulty or wrong items can be returned: there are no returns or
+// exchanges for a change of mind or the wrong size ordered.
+export const RETURN_REASONS = ["Damaged or defective", "Wrong item or size sent", "Not as described"];
 
 const TEXT_MAX = 500;
 const CHANGED = "This order just changed. Refresh to see its latest state.";
@@ -72,7 +74,7 @@ export async function requestCancellation(orderId: string, userId: string, reaso
     sendEmailsSoon();
 }
 
-// Customer: ask to return, within 7 days of delivery.
+// Customer: ask to return, within 2 days of delivery.
 export async function requestReturn(orderId: string, userId: string, reasonInput: unknown, detailsInput: unknown) {
     if (typeof reasonInput !== "string" || !RETURN_REASONS.includes(reasonInput)) {
         throw new OrderRequestError(400, "Choose a reason for the return");
@@ -197,6 +199,22 @@ export async function markReturned(orderId: string) {
     }
 }
 
+// Admin: a returned item was replaced, so no refund is owed. The replacement
+// is sent by hand, outside the order.
+export async function markReplaced(orderId: string) {
+    const claimed = await prisma.order.updateMany({
+        where: { id: orderId, status: "RETURNED", refundedAt: null, replacementSentAt: null },
+        data: { replacementSentAt: new Date() },
+    });
+
+    if (claimed.count === 0) {
+        const exists = await prisma.order.count({ where: { id: orderId } });
+        throw exists
+            ? new OrderRequestError(409, "This order isn't a return waiting for a refund. Refresh to see its latest state.")
+            : new OrderRequestError(404, "Order not found");
+    }
+}
+
 // Admin: record a refund already made in the Razorpay dashboard.
 export async function markRefunded(orderId: string, amountInput: unknown, referenceInput: unknown) {
     const reference = checkText(referenceInput, "The refund reference").slice(0, 100);
@@ -205,7 +223,8 @@ export async function markRefunded(orderId: string, amountInput: unknown, refere
     const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payment: true } });
     if (!order) throw new OrderRequestError(404, "Order not found");
 
-    const owed = (order.status === "CANCELLED" && order.payment?.status === "PAID") || order.status === "RETURNED";
+    const owed = ((order.status === "CANCELLED" && order.payment?.status === "PAID") || order.status === "RETURNED") &&
+        !order.replacementSentAt;
     if (!owed || order.refundedAt) {
         throw new OrderRequestError(409, "This order isn't waiting for a refund. Refresh to see its latest state.");
     }

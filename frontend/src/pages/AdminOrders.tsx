@@ -243,7 +243,12 @@ function AdminOrders() {
 
     function markReturned(order: AdminOrderView) {
         if (!window.confirm(`Has the parcel for order #${order.number} arrived and been checked?`)) return;
-        act(order, "returned", { method: "POST" }, "marked returned. Refund it next: it's under Refund needed.");
+        act(order, "returned", { method: "POST" }, "marked returned. Send a replacement or refund it next: it's under Refund needed.");
+    }
+
+    function markReplaced(order: AdminOrderView) {
+        if (!window.confirm(`Have you sent a replacement for order #${order.number}? It won't be refunded.`)) return;
+        act(order, "replaced", { method: "POST" }, "marked as replaced, so no refund is owed.");
     }
 
     function markRefunded(order: AdminOrderView) {
@@ -323,7 +328,8 @@ function AdminOrders() {
                                     <button disabled={busy} onClick={() => cancel(order)}>Approve: cancel the order</button>
                                 ) : (
                                     <p>
-                                        Arrange the return with the customer. Once the parcel is back and checked:{" "}
+                                        Ask for photos or an unboxing video if they haven't sent them. Arrange the
+                                        return with the customer: we pay its shipping. Once the parcel is back and checked:{" "}
                                         <button disabled={busy} onClick={() => markReturned(order)}>Mark as returned</button>
                                     </p>
                                 )}
@@ -384,8 +390,16 @@ function AdminOrders() {
                                         onChange={(e) => updateRefundForm(order, "reference", e.target.value)} />
                                     <button disabled={busy} onClick={() => markRefunded(order)}>Mark as refunded and email the customer</button>
                                 </p>
+                                {order.status === "RETURNED" && (
+                                    <p>
+                                        Or, if you sent a replacement instead (take it off on the <Link to="/admin">Stock</Link> page):{" "}
+                                        <button disabled={busy} onClick={() => markReplaced(order)}>Mark as replaced (no refund)</button>
+                                    </p>
+                                )}
                             </div>
                         )}
+
+                        {order.replacementSentAt && <p>Replacement sent on {formatDate(order.replacementSentAt)}</p>}
 
                         {order.refundedAt && (
                             <p>

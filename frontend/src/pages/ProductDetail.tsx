@@ -209,9 +209,11 @@ function ProductDetail() {
                             </Details>
                             <Details title="Cancellations and returns">
                                 <p>
-                                    Cancel within {returns.cancelWindow} of paying for a full refund. Once it's
-                                    delivered, you can ask for a return within {returns.returnWindowDays} days
-                                    if it's unworn and unwashed, with its tags on.
+                                    Cancel within {returns.cancelWindow} of paying for a full refund. We don't
+                                    take returns or exchanges for a change of mind or the wrong size ordered.
+                                    If it arrives damaged or defective, or we send the wrong item or size,
+                                    tell us within {returns.returnWindowDays} days of delivery and we'll
+                                    replace it, or refund you.
                                     {" "}<Link to="/refunds" className={linkClass}>Returns policy</Link>
                                 </p>
                             </Details>

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { business, shipping } from "../../lib/business";
+import { business, returns, shipping } from "../../lib/business";
 import PolicyPage from "../../components/PolicyPage";
 
 function Shipping() {
@@ -81,7 +81,8 @@ function Shipping() {
             <section>
                 <h2>Damaged or wrong item</h2>
                 <p>
-                    If your parcel arrives damaged or you receive the wrong item, see
+                    If your parcel arrives damaged or you receive the wrong item, tell us
+                    within {returns.returnWindowDays} days of delivery. See
                     our <Link to="/refunds">Cancellation &amp; Refunds</Link> policy. We'll cover the
                     return shipping.
                 </p>

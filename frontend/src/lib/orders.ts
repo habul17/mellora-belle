@@ -42,6 +42,7 @@ export type OrderView = {
     refundedAt: string | null;
     refundAmount: number | null;
     refundReference: string | null;
+    replacementSentAt: string | null;
     address: {
         fullName: string;
         phone: string;
@@ -91,13 +92,16 @@ export const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
 ];
 
 // Must match RETURN_REASONS in backend/src/lib/orderRequests.ts.
-export const RETURN_REASONS = ["Damaged or defective", "Wrong item sent", "Doesn't fit", "Changed my mind"];
+export const RETURN_REASONS = ["Damaged or defective", "Wrong item or size sent", "Not as described"];
 
 export function statusLabel(order: OrderView) {
     const ended = order.status === "CANCELLED" ? "Cancelled" : order.status === "RETURNED" ? "Returned" : null;
 
     if (ended && order.refundedAt) return `${ended} – refunded`;
-    if (ended && order.refundNeeded) return `${ended} – refund in progress`;
+    if (order.replacementSentAt) return "Returned – replaced";
+    // A return can still end in a replacement, so only a cancellation says
+    // a refund is coming.
+    if (order.status === "CANCELLED" && order.refundNeeded) return "Cancelled – refund in progress";
     if (ended) return ended;
     if (order.status === "PENDING") return "Awaiting payment";
     if (order.status === "CANCELLATION_REQUESTED") return "Cancellation requested";

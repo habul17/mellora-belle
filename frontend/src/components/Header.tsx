@@ -4,7 +4,7 @@ import { getToken, logOut, authFetchQuiet } from "../lib/api"
 import { getGuestCart } from "../lib/guestCart"
 import { onCartChange } from "../lib/cartCount"
 import { containerClass } from "../lib/styles"
-import { returns } from "../lib/business"
+import { shipping } from "../lib/business"
 import { BagIcon, CloseIcon, MenuIcon, UserIcon } from "./icons"
 
 const guestCartCount = () => getGuestCart().reduce((sum, item) => sum + item.quantity, 0);
@@ -63,7 +63,7 @@ function Header() {
     return (
         <>
             <p className="bg-ink px-4 py-2 text-center text-[11px] tracking-[0.18em] text-ivory uppercase">
-                Shipping across India · Easy {returns.returnWindowDays}-day returns
+                Free shipping across India on {shipping.freeFromItems}+ items
             </p>
 
             <header className="sticky top-0 z-40 border-b border-stone bg-ivory/95 backdrop-blur">

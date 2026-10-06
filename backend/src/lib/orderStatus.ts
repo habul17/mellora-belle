@@ -22,7 +22,7 @@ export function describeStatus(status: OrderStatus) {
 // The Cancellation & Refunds policy (frontend/src/lib/business.ts `returns`)
 // promises these windows. Change both together.
 const CANCEL_WINDOW_MS = 60 * 60 * 1000;
-const RETURN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const RETURN_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 type RequestableOrder = {
     status: OrderStatus;
@@ -43,7 +43,7 @@ export function cancelDeadline(order: RequestableOrder, now = new Date()) {
 }
 
 // Until when the customer can ask to return, or null if they can't.
-// Allowed once, within 7 days of delivery.
+// Allowed once, within 2 days of delivery.
 export function returnDeadline(order: RequestableOrder, now = new Date()) {
     if (order.status !== "DELIVERED") return null;
     if (order.returnRequestedAt || !order.deliveredAt) return null;

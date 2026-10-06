@@ -20,7 +20,7 @@ function Refunds() {
                 </p>
                 <p>
                     After {returns.cancelWindow}, your order may already be packed, so it can't be
-                    cancelled. You can return it after delivery instead (see below).
+                    cancelled.
                 </p>
             </section>
 
@@ -35,41 +35,44 @@ function Refunds() {
             <section>
                 <h2>Returns</h2>
                 <p>
-                    You can return an item within {returns.returnWindowDays} days of delivery. It
-                    must be unworn and unwashed, with its original tags still attached.
+                    We don't accept returns or exchanges if you change your mind or order the wrong
+                    size. If you're not sure of your size, contact us before you order and we'll help.
                 </p>
                 <p>
-                    To start a return, use the Return button on the order in{" "}
-                    <Link to="/orders">My orders</Link>, or contact us with your order number,
-                    within those {returns.returnWindowDays} days.
+                    We do take back items that are damaged or defective, different from their
+                    description, or not what you ordered (the wrong item or size). Tell us
+                    within {returns.returnWindowDays} days of delivery:
                 </p>
                 <ul>
                     <li>
-                        <strong>Damaged, defective or wrong item:</strong> send us a photo when you
-                        contact us. We'll arrange the return and pay the return shipping.
+                        Use the Return button on the order in <Link to="/orders">My orders</Link>, or
+                        contact us with your order number.
                     </li>
                     <li>
-                        <strong>Changed your mind (including size):</strong> you send the item back
-                        to us and pay the return shipping.
+                        Email photos of the problem, or an unboxing video,
+                        to <a href={`mailto:${business.email}`}>{business.email}</a>.
+                    </li>
+                    <li>
+                        Keep the item unworn and unwashed, with its tags and packaging.
                     </li>
                 </ul>
                 <p>
-                    We don't offer direct exchanges yet. To get a different size, return the item
-                    for a refund and place a new order.
+                    We'll arrange the return and pay its shipping. Once it's back with us, we'll send
+                    you a replacement, or a full refund if that item is out of stock.
                 </p>
             </section>
 
             <section>
                 <h2>Refunds</h2>
                 <p>
-                    Once we receive and check the returned item, we refund the amount to your
-                    original payment method within {returns.refundDays}. For a cancelled order,
+                    When we refund a return, the money goes back to your original payment method
+                    within {returns.refundDays} of us receiving and checking the item. For a cancelled order,
                     the refund starts as soon as it's cancelled. Your bank may take a few extra
                     days to show it.
                 </p>
                 <p>
-                    If a returned item isn't unworn, unwashed and tagged, we can't accept the
-                    return. We'll contact you to arrange sending it back.
+                    If a returned item has been worn or washed, or doesn't have the problem
+                    reported, we can't accept the return. We'll contact you to arrange sending it back.
                 </p>
             </section>
         </PolicyPage>

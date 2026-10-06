@@ -41,7 +41,10 @@ export const shipping = {
 
 export const returns = {
     cancelWindow: "1 hour",
-    returnWindowDays: 7,
+    // Returns are only for damaged, defective or wrong items, reported this
+    // many days after delivery. Change RETURN_WINDOW_MS in
+    // backend/src/lib/orderStatus.ts with it.
+    returnWindowDays: 2,
     refundDays: "5-7 working days",
 };
 

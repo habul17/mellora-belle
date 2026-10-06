@@ -15,7 +15,7 @@ import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
 import { sendQueuedOrderEmails } from "./lib/orderEmails.js"
 import { orderViewInclude, adminOrderViewInclude, toOrderView, toAdminOrderView } from "./lib/orderView.js"
 import { statusBefore, describeStatus } from "./lib/orderStatus.js"
-import { OrderRequestError, requestCancellation, requestReturn, cancelOrder, declineRequest, markReturned, markRefunded } from "./lib/orderRequests.js"
+import { OrderRequestError, requestCancellation, requestReturn, cancelOrder, declineRequest, markReturned, markReplaced, markRefunded } from "./lib/orderRequests.js"
 import { normalizeEmail, isValidEmail, passwordProblem, findUserByEmail, startSession, refreshSession, endSession } from "./lib/auth.js"
 import { LoginCodeError, sendLoginCode, verifyLoginCode } from "./lib/loginCodes.js"
 import { authenticator } from "otplib"
@@ -1150,6 +1150,9 @@ app.post("/admin/orders/:id/decline", requireAuth, requireAdmin, (req, res) => {
 
 app.post("/admin/orders/:id/returned", requireAuth, requireAdmin, (req, res) =>
     orderRequestRoute(req, res, (id) => markReturned(id), { action: "order.returned" }));
+
+app.post("/admin/orders/:id/replaced", requireAuth, requireAdmin, (req, res) =>
+    orderRequestRoute(req, res, (id) => markReplaced(id), { action: "order.replaced" }));
 
 app.post("/admin/orders/:id/refund", requireAuth, requireAdmin, (req, res) => {
     const body = readBody(refundBody, req, res);

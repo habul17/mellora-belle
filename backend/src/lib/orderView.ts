@@ -24,9 +24,9 @@ export function toOrderView(order: ViewableOrder) {
         number: order.number,
         status: order.status,
         // Money arrived but the order was cancelled (sold out first, see
-        // markOrderPaid, or cancelled on request) or returned, and the refund
-        // hasn't been recorded yet.
-        refundNeeded: !order.refundedAt &&
+        // markOrderPaid, or cancelled on request) or returned and not
+        // replaced, and the refund hasn't been recorded yet.
+        refundNeeded: !order.refundedAt && !order.replacementSentAt &&
             ((order.status === "CANCELLED" && order.payment?.status === "PAID") || order.status === "RETURNED"),
         subtotal: order.subtotal,
         shippingCost: order.shippingCost,
@@ -50,6 +50,7 @@ export function toOrderView(order: ViewableOrder) {
         refundedAt: order.refundedAt,
         refundAmount: order.refundAmount,
         refundReference: order.refundReference,
+        replacementSentAt: order.replacementSentAt,
         address: {
             fullName: order.fullName,
             phone: order.phone,

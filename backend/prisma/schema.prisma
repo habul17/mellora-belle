@@ -214,6 +214,8 @@ model Order {
   refundedAt      DateTime?
   refundAmount    Int?
   refundReference String?
+  // Set by the admin when a returned item was replaced instead of refunded.
+  replacementSentAt DateTime?
   items           OrderItem[]
   payment         Payment?
   emails          OrderEmail[]
