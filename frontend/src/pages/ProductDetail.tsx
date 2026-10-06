@@ -14,6 +14,7 @@ import { business, returns, shipping } from "../lib/business"
 import { eyebrowClass, linkClass } from "../lib/styles"
 import { Button, ButtonLink, Container, EmptyState, ErrorState, Notice, Skeleton, SlowHint } from "../components/ui"
 import { ChevronLeft, ChevronRight } from "../components/icons"
+import { CareList, DetailsTable, SizeChartTable } from "../components/ProductInfo"
 
 // "Only 2 left" shows at this stock level or below.
 const LOW_STOCK = 3;
@@ -149,10 +150,15 @@ function ProductDetail() {
                         )}
 
                         <fieldset className="mt-5">
-                            <legend className="mb-3 text-sm">
+                            {/* Floated, the legend shares its line with the size chart link
+                                (a fieldset otherwise draws its legend apart from the rest). */}
+                            <legend className="float-left mb-3 text-sm">
                                 <span className="text-muted">Size:</span> {selected?.size ?? "choose one"}
                             </legend>
-                            <div className="grid grid-cols-5 gap-2">
+                            {product.sizeChart.trim() && (
+                                <SizeChartButton text={product.sizeChart} name={product.name} className="float-right" />
+                            )}
+                            <div className="clear-both grid grid-cols-5 gap-2">
                                 {variants.map((variant) => {
                                     const out = variant.stockQuantity <= 0;
                                     const isSelected = variant.id === selectedVariantId;
@@ -191,6 +197,24 @@ function ProductDetail() {
                             <Details title="Description" open>
                                 <p className="whitespace-pre-line">{product.description}</p>
                             </Details>
+                            {product.sizeChart.trim() && (
+                                <Details title="Size chart">
+                                    <p className="mb-2">Measurements in inches.</p>
+                                    <SizeChartTable text={product.sizeChart} />
+                                    <p className="mt-3">{SIZE_HELP}</p>
+                                </Details>
+                            )}
+                            <Details title="Product details">
+                                <DetailsTable text={product.details} extra={[
+                                    { label: "Country of origin", value: business.countryOfOrigin },
+                                    { label: "Sold by", value: `${business.legalName}, ${business.city}` },
+                                ]} />
+                            </Details>
+                            {product.care.trim() && (
+                                <Details title="Wash care">
+                                    <CareList text={product.care} />
+                                </Details>
+                            )}
                             <Details title="Delivery">
                                 <p>
                                     We dispatch within {shipping.dispatchDays}, and it usually reaches you
@@ -201,16 +225,11 @@ function ProductDetail() {
                                     {" "}<Link to="/shipping" className={linkClass}>Shipping policy</Link>
                                 </p>
                             </Details>
-                            <Details title="Product details">
-                                <p>
-                                    Country of origin: {business.countryOfOrigin}<br />
-                                    Sold by: {business.legalName}, {business.city}
-                                </p>
-                            </Details>
                             <Details title="Cancellations and returns">
                                 <p>
                                     Cancel within {returns.cancelWindow} of paying for a full refund. We don't
-                                    take returns or exchanges for a change of mind or the wrong size ordered.
+                                    take returns or exchanges for a change of mind or the wrong size ordered
+                                    {product.sizeChart.trim() ? ", so please check the size chart first" : ""}.
                                     If it arrives damaged or defective, or we send the wrong item or size,
                                     tell us within {returns.returnWindowDays} days of delivery and we'll
                                     replace it, or refund you.
@@ -222,6 +241,38 @@ function ProductDetail() {
                 </div>
             </Container>
         </main>
+    );
+}
+
+const SIZE_HELP = "We can't take returns for a size that doesn't fit. If you're between sizes, " +
+    `email ${business.email} or call ${business.phone} before you order and we'll help you choose.`;
+
+// Opens over the page, next to the size buttons, so choosing a size doesn't
+// mean losing your place.
+function SizeChartButton({ text, name, className = "" }: { text: string; name: string; className?: string }) {
+    const dialog = useRef<HTMLDialogElement>(null);
+
+    return (
+        <>
+            <button type="button" onClick={() => dialog.current?.showModal()} className={`text-sm ${linkClass} ${className}`}>
+                Size chart
+            </button>
+            {/* A click on the dark backdrop lands on the dialog itself and closes it. */}
+            <dialog ref={dialog} aria-labelledby="size-chart-title"
+                onClick={(e) => { if (e.target === e.currentTarget) dialog.current?.close(); }}
+                className="m-auto w-[min(32rem,calc(100%-2rem))] bg-ivory p-0 text-ink backdrop:bg-ink/40">
+                <div className="p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <h2 id="size-chart-title" className="text-3xl">Size chart</h2>
+                        <button type="button" onClick={() => dialog.current?.close()} aria-label="Close size chart"
+                            className="-mt-1 -mr-2 px-2 text-2xl leading-none text-muted hover:text-ink">×</button>
+                    </div>
+                    <p className="mt-1 text-sm text-muted">{name}. Measurements in inches.</p>
+                    <div className="mt-4"><SizeChartTable text={text} /></div>
+                    <p className="mt-4 text-sm leading-relaxed text-muted">{SIZE_HELP}</p>
+                </div>
+            </dialog>
+        </>
     );
 }
 

@@ -36,7 +36,8 @@ function Refunds() {
                 <h2>Returns</h2>
                 <p>
                     We don't accept returns or exchanges if you change your mind or order the wrong
-                    size. If you're not sure of your size, contact us before you order and we'll help.
+                    size. Each product page has a size chart. If you're still not sure of your size,
+                    contact us before you order and we'll help.
                 </p>
                 <p>
                     We do take back items that are damaged or defective, different from their

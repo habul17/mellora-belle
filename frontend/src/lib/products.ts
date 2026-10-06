@@ -15,6 +15,10 @@ export type Product = {
     name: string;
     slug: string;
     description: string;
+    // Plain text, one entry per line (see lib/productInfo.ts).
+    details: string;
+    sizeChart: string;
+    care: string;
     basePrice: number;
     compareAtPrice: number | null;
     images: string[];
@@ -37,11 +41,16 @@ export function isSoldOut(product: Product) {
     return product.variants.every((v) => v.stockQuantity <= 0);
 }
 
+// A server from before these fields existed (mid-deploy) sends none.
+function withText(product: Product): Product {
+    return { ...product, details: product.details ?? "", sizeChart: product.sizeChart ?? "", care: product.care ?? "" };
+}
+
 export async function fetchProducts(): Promise<Product[]> {
     const response = await fetch(`${API}/products`);
     const data = await response.json();
     if (!Array.isArray(data.products)) throw new Error(data.error ?? "Could not load products");
-    return data.products;
+    return data.products.map(withText);
 }
 
 // Null when there's no such product (a mistyped or old link).
@@ -50,5 +59,5 @@ export async function fetchProduct(slug: string): Promise<Product | null> {
     if (response.status === 404) return null;
     const data = await response.json();
     if (!data.product) throw new Error(data.error ?? "Could not load this product");
-    return data.product;
+    return withText(data.product);
 }
