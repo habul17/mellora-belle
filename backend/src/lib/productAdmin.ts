@@ -3,8 +3,8 @@ import { Prisma } from "../generated/prisma/client.js"
 import type { Size } from "../generated/prisma/client.js"
 
 // The admin's Products page: edit what the shop shows (name, description,
-// details, size chart, care, prices, weight, colour, photos, on sale or not),
-// add a product, add a size.
+// details, size chart, care, category, prices, weight, colour, photos, on sale
+// or not), add a product, add a size.
 // Nothing here deletes: a product or size that has ever been ordered stays in
 // old orders, so the admin switches it off (or sets its stock to 0) instead.
 
@@ -109,9 +109,14 @@ export async function createProduct(details: NewProduct) {
 }
 
 // Saves the edit form. Returns the product and what changed, for the audit log.
-export async function updateProduct(id: string, details: ProductDetails) {
-    const before = await prisma.product.findUnique({ where: { id }, include: { variants: true } });
+export async function updateProduct(id: string, details: ProductDetails & { categoryId?: string | undefined }) {
+    const before = await prisma.product.findUnique({ where: { id }, include: { variants: true, category: true } });
     if (!before) throw new ProductAdminError(404, "Product not found");
+
+    const movingTo = details.categoryId !== undefined && details.categoryId !== before.categoryId
+        ? await prisma.category.findUnique({ where: { id: details.categoryId } })
+        : undefined;
+    if (movingTo === null) throw new ProductAdminError(400, "Choose a category");
 
     const beforeColor = before.variants[0]?.color ?? "";
     const changes: Record<string, unknown> = {};
@@ -123,6 +128,7 @@ export async function updateProduct(id: string, details: ProductDetails) {
         if (details[key] !== undefined && before[key] !== details[key]) changes[key] = "changed";
     }
     if (before.images.join("\n") !== details.images.join("\n")) changes.images = { from: before.images.length, to: details.images.length };
+    if (movingTo) changes.category = { from: before.category.name, to: movingTo.name };
 
     const [product] = await prisma.$transaction([
         prisma.product.update({
@@ -134,6 +140,7 @@ export async function updateProduct(id: string, details: ProductDetails) {
                 ...(details.details !== undefined && { details: details.details }),
                 ...(details.sizeChart !== undefined && { sizeChart: details.sizeChart }),
                 ...(details.care !== undefined && { care: details.care }),
+                ...(movingTo && { categoryId: movingTo.id }),
                 basePrice: details.basePrice,
                 compareAtPrice: details.compareAtPrice,
                 weight: details.weight,

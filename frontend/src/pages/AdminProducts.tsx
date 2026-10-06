@@ -89,6 +89,7 @@ function bodyOf(draft: Draft) {
         color: draft.color,
         images: draft.images.split("\n").map((line) => line.trim()).filter(Boolean),
         isActive: draft.isActive,
+        categoryId: draft.categoryId,
     };
 }
 
@@ -109,15 +110,13 @@ function ProductForm({ draft, setDraft, categories, isNew }: {
             <p>
                 <label>Name<br /><input value={draft.name} onChange={set("name")} maxLength={100} size={40} /></label>
             </p>
-            {isNew && (
-                <p>
-                    <label>Category<br />
-                        <select value={draft.categoryId} onChange={set("categoryId")}>
-                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                    </label>
-                </p>
-            )}
+            <p>
+                <label>Category (shown above the name on the product page)<br />
+                    <select value={draft.categoryId} onChange={set("categoryId")}>
+                        {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </label>
+            </p>
             <p>
                 <label>Description (a blank line starts a new paragraph)<br />
                     <textarea value={draft.description} onChange={set("description")} rows={8} cols={70} maxLength={5000} />
@@ -273,7 +272,7 @@ function AdminProducts() {
         if (!draft) return;
         const sizes = SIZES.filter((size) => (draft.stock[size] ?? "").trim() !== "")
             .map((size) => ({ size, stockQuantity: Number(draft.stock[size]) }));
-        send("new", "/admin/products", "POST", { ...bodyOf(draft), categoryId: draft.categoryId, sizes }, (data) => {
+        send("new", "/admin/products", "POST", { ...bodyOf(draft), sizes }, (data) => {
             replace(data.product);
             close();
             setMessage({ id: data.product.id, text: data.product.isActive ? "Added, and on sale now" : "Added. Tick \"On sale\" when it's ready to sell." });

@@ -117,7 +117,11 @@ const originalAbovePrice = [
     { message: "The original price must be higher than the price (or leave it blank)" },
 ] as const;
 
-export const productBody = z.object(productDetails).refine(...originalAbovePrice);
+export const productBody = z.object({
+    ...productDetails,
+    // Left out (an older admin page), the product stays in its category.
+    categoryId: text("Choose a category", 64, "Choose a category").optional(),
+}).refine(...originalAbovePrice);
 
 export const newProductBody = z.object({
     ...productDetails,
