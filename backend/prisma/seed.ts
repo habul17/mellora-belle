@@ -19,6 +19,13 @@ async function main() {
         },
     });
 
+    const coordSetCategory = await prisma.category.create({
+        data: {
+            name: "Co-ord Set",
+            slug: "co-ord-set",
+        },
+    });
+
     await prisma.product.create({
         data: {
             name: "Midnight Bloom Designer Kurthi",
@@ -101,7 +108,7 @@ async function main() {
                 "https://res.cloudinary.com/ozdnlp8w/image/upload/v1787977594/IMG_6694.jpg",
                 "https://res.cloudinary.com/ozdnlp8w/image/upload/v1787977591/IMG_6692.jpg"
             ],
-            categoryId: kurthiCategory.id,
+            categoryId: coordSetCategory.id,
             variants: {
                 create: [
                     { size: "M", color: "Olive Green", sku: "OAC-M", stockQuantity: 10 },
