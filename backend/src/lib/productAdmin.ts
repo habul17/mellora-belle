@@ -3,7 +3,8 @@ import { Prisma } from "../generated/prisma/client.js"
 import type { Size } from "../generated/prisma/client.js"
 
 // The admin's Products page: edit what the shop shows (name, description,
-// prices, weight, colour, photos, on sale or not), add a product, add a size.
+// details, size chart, care, prices, weight, colour, photos, on sale or not),
+// add a product, add a size.
 // Nothing here deletes: a product or size that has ever been ordered stays in
 // old orders, so the admin switches it off (or sets its stock to 0) instead.
 
@@ -16,6 +17,9 @@ export class ProductAdminError extends Error {
 export type ProductDetails = {
     name: string;
     description: string;
+    details?: string | undefined;
+    sizeChart?: string | undefined;
+    care?: string | undefined;
     basePrice: number;
     compareAtPrice: number | null;
     weight: number;
@@ -75,6 +79,9 @@ export async function createProduct(details: NewProduct) {
                 name: details.name,
                 slug,
                 description: details.description,
+                details: details.details ?? "",
+                sizeChart: details.sizeChart ?? "",
+                care: details.care ?? "",
                 basePrice: details.basePrice,
                 compareAtPrice: details.compareAtPrice,
                 weight: details.weight,
@@ -112,7 +119,9 @@ export async function updateProduct(id: string, details: ProductDetails) {
         if (before[key] !== details[key]) changes[key] = { from: before[key], to: details[key] };
     }
     if (beforeColor !== details.color) changes.color = { from: beforeColor, to: details.color };
-    if (before.description !== details.description) changes.description = "changed";
+    for (const key of ["description", "details", "sizeChart", "care"] as const) {
+        if (details[key] !== undefined && before[key] !== details[key]) changes[key] = "changed";
+    }
     if (before.images.join("\n") !== details.images.join("\n")) changes.images = { from: before.images.length, to: details.images.length };
 
     const [product] = await prisma.$transaction([
@@ -121,6 +130,10 @@ export async function updateProduct(id: string, details: ProductDetails) {
             data: {
                 name: details.name,
                 description: details.description,
+                // Left out, it stays as it is.
+                ...(details.details !== undefined && { details: details.details }),
+                ...(details.sizeChart !== undefined && { sizeChart: details.sizeChart }),
+                ...(details.care !== undefined && { care: details.care }),
                 basePrice: details.basePrice,
                 compareAtPrice: details.compareAtPrice,
                 weight: details.weight,

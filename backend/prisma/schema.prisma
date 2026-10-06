@@ -32,6 +32,11 @@ model Product {
   name           String
   slug           String    @unique
   description    String
+  // Plain text the admin types, one entry per line: "Fabric: Premium Rayon",
+  // the size chart's headings then one row per size, and wash care steps.
+  details        String    @default("")
+  sizeChart      String    @default("")
+  care           String    @default("")
   basePrice      Int
   compareAtPrice Int?
   weight         Int

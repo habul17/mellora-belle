@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "care" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "details" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "sizeChart" TEXT NOT NULL DEFAULT '';

@@ -98,6 +98,10 @@ const size = z.enum(["S", "M", "L", "XL", "XXL"], { error: "Choose a size (S, M,
 const productDetails = {
     name: text("Enter the product name", 100, "The name must be under 100 characters"),
     description: text("Write a description", 5000, "The description must be under 5000 characters"),
+    // Left out (an older admin page) keeps what's saved; "" clears it.
+    details: optionalText(3000, "The product details must be under 3000 characters"),
+    sizeChart: optionalText(2000, "The size chart must be under 2000 characters"),
+    care: optionalText(2000, "The wash care must be under 2000 characters"),
     basePrice: rupees("Enter the price in whole rupees"),
     compareAtPrice: rupees("Enter the original price in whole rupees, or leave it blank").nullable(),
     weight: z.number({ error: "Enter the packed weight in grams" })
