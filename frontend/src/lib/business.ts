@@ -11,7 +11,7 @@ export const business = {
     phoneHref: "tel:+919944424576",
     // Full postal address, shown on the Contact page. Razorpay's KYC checks it
     // matches the one on the application.
-    address: "477, Selvanilayam, Puliyakulam Road, Ramanathapuram, Coimbatore, Tamil Nadu 641045",
+    address: "477, Selvanilaiyam, Puliyakulam Main Road, Ramanathapuram, Coimbatore, Tamil Nadu 641045",
     city: "Coimbatore, Tamil Nadu",
     jurisdiction: "Coimbatore, Tamil Nadu",
     grievanceOfficer: {
