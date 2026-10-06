@@ -7,6 +7,7 @@ import { formatPrice } from "../lib/format"
 import { sized } from "../lib/images"
 import { bySize } from "../lib/products"
 import type { Variant } from "../lib/products"
+import { DetailsTable, SizeChartTable } from "../components/ProductInfo"
 
 const SIZES = ["S", "M", "L", "XL", "XXL"];
 
@@ -17,6 +18,9 @@ type AdminProduct = {
     name: string;
     slug: string;
     description: string;
+    details: string;
+    sizeChart: string;
+    care: string;
     basePrice: number;
     compareAtPrice: number | null;
     weight: number;
@@ -33,6 +37,9 @@ type Saved = { product: AdminProduct; variant: Variant };
 type Draft = {
     name: string;
     description: string;
+    details: string;
+    sizeChart: string;
+    care: string;
     basePrice: string;
     compareAtPrice: string;
     weight: string;
@@ -47,6 +54,9 @@ function draftOf(product: AdminProduct): Draft {
     return {
         name: product.name,
         description: product.description,
+        details: product.details ?? "",
+        sizeChart: product.sizeChart ?? "",
+        care: product.care ?? "",
         basePrice: String(product.basePrice),
         compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : "",
         weight: String(product.weight),
@@ -59,7 +69,7 @@ function draftOf(product: AdminProduct): Draft {
 }
 
 const emptyDraft = (categoryId: string): Draft => ({
-    name: "", description: "", basePrice: "", compareAtPrice: "", weight: "", color: "",
+    name: "", description: "", details: "", sizeChart: "", care: "", basePrice: "", compareAtPrice: "", weight: "", color: "",
     images: "", isActive: false, categoryId, stock: {},
 });
 
@@ -70,6 +80,9 @@ function bodyOf(draft: Draft) {
     return {
         name: draft.name,
         description: draft.description,
+        details: draft.details,
+        sizeChart: draft.sizeChart,
+        care: draft.care,
         basePrice: toNumber(draft.basePrice),
         compareAtPrice: toNumber(draft.compareAtPrice),
         weight: toNumber(draft.weight),
@@ -108,6 +121,33 @@ function ProductForm({ draft, setDraft, categories, isNew }: {
             <p>
                 <label>Description (a blank line starts a new paragraph)<br />
                     <textarea value={draft.description} onChange={set("description")} rows={8} cols={70} maxLength={5000} />
+                </label>
+            </p>
+            <p>
+                <label>Product details: one per line, as Label: Value (for example Fabric: Premium Rayon)<br />
+                    <textarea value={draft.details} onChange={set("details")} rows={10} cols={70} maxLength={3000} />
+                </label>
+            </p>
+            {draft.details.trim() && (
+                <div style={{ maxWidth: 520, marginBottom: 12 }}>
+                    How it will look: <DetailsTable text={draft.details} />
+                </div>
+            )}
+            <p>
+                <label>
+                    Size chart, in inches: the headings on the first line, then one line per size, with commas
+                    between (for example Size, Bust, Waist, Hip, Length and then M, 38, 36, 42, 46)<br />
+                    <textarea value={draft.sizeChart} onChange={set("sizeChart")} rows={6} cols={70} maxLength={2000} spellCheck={false} />
+                </label>
+            </p>
+            {draft.sizeChart.trim() && (
+                <div style={{ maxWidth: 520, marginBottom: 12 }}>
+                    How it will look: <SizeChartTable text={draft.sizeChart} />
+                </div>
+            )}
+            <p>
+                <label>Wash care: one step per line<br />
+                    <textarea value={draft.care} onChange={set("care")} rows={5} cols={70} maxLength={2000} />
                 </label>
             </p>
             <p>
