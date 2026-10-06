@@ -7,8 +7,8 @@ export const business = {
     name: "Mellora Belle",
     legalName: "Marteena Jency Vincent",
     email: "mellorabelle.in@gmail.com",
-    phone: "+91 99444 24576",
-    phoneHref: "tel:+919944424576",
+    phone: "+91 73043 88689",
+    phoneHref: "tel:+917304388689",
     // Full postal address, shown on the Contact page. Razorpay's KYC checks it
     // matches the one on the application.
     address: "477, Selvanilaiyam, Puliyakulam Main Road, Ramanathapuram, Coimbatore, Tamil Nadu 641045",

@@ -4,7 +4,7 @@
 export const store = {
     name: "Mellora Belle",
     email: "mellorabelle.in@gmail.com",
-    phone: "+91 99444 24576",
+    phone: "+91 73043 88689",
     dispatchDays: "1-2 working days",
     deliveryDays: "3-7 working days",
     refundDays: "5-7 working days",
