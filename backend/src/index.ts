@@ -26,7 +26,7 @@ import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCo
 import { loginLimits, loginCodeLimits, verifyLoginCodeLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { robotsTxt, sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
-import { shiprocketEnabled } from "./lib/shiprocket.js"
+import { checkShiprocketLogin, shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
 import { ProductAdminError, createProduct, updateProduct, addSize, listAdminProducts } from "./lib/productAdmin.js"
 import { siteOrigins, siteUrl } from "./lib/site.js"
@@ -1375,4 +1375,5 @@ setInterval(() => {
 
 app.listen(process.env.PORT || 4000, () => {
     console.log(`Server Running On Port ${process.env.PORT || 4000}`);
+    checkShiprocketLogin();
 })

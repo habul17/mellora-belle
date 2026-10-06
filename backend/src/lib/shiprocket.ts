@@ -4,8 +4,8 @@
 // once in the Shiprocket panel.
 //
 // Switched on by SHIPROCKET_EMAIL and SHIPROCKET_PASSWORD, which are an *API
-// user* made in the panel (Settings > API > Configure), not the owner's own
-// login. Until they are set, orders are shipped by hand as before.
+// user* made in the panel (Settings > Additional Settings > API Users), not
+// the owner's own login. Until they are set, orders are shipped by hand.
 
 const DEFAULT_API_URL = "https://apiv2.shiprocket.in/v1/external";
 
@@ -91,6 +91,18 @@ async function request(method: "GET" | "POST", path: string, payload?: unknown, 
     }
 
     return body;
+}
+
+// Log in once at boot, so a wrong API user or password shows up in Render's
+// logs straight away rather than when the first order is packed.
+export async function checkShiprocketLogin() {
+    if (!shiprocketEnabled()) return;
+    try {
+        await token();
+        console.log("Shiprocket login OK");
+    } catch (err) {
+        console.warn(`WARNING: ${(err as Error).message}. Check SHIPROCKET_EMAIL and SHIPROCKET_PASSWORD.`);
+    }
 }
 
 // Forget the token (tests, or after changing the API user's password).
