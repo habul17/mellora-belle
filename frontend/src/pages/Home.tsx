@@ -19,7 +19,7 @@ const HERO = [
 const STORY_PHOTO = `${PHOTO}/v1787977591/IMG_6692.jpg`;
 
 const PROMISES = [
-    { Icon: TruckIcon, title: "Ships across India", text: `Dispatched within ${shipping.dispatchDays}.` },
+    { Icon: TruckIcon, title: "Ships across India", text: `Free shipping on ${shipping.freeFromItems} or more items. Dispatched within ${shipping.dispatchDays}.` },
     { Icon: ReturnIcon, title: "Easy returns", text: `Ask for a return within ${returns.returnWindowDays} days of delivery.` },
     { Icon: LockIcon, title: "Secure payment", text: "UPI, cards and netbanking through Razorpay." },
     { Icon: ChatIcon, title: "Here to help", text: "Email or call us, and a real person answers." },

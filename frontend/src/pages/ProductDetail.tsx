@@ -141,7 +141,7 @@ function ProductDetail() {
                             )}
                         </p>
                         <p className="mt-2 text-sm text-muted">
-                            Shipping is worked out at checkout. <Link to="/shipping" className={linkClass}>See rates</Link>
+                            Free shipping on {shipping.freeFromItems} or more items. <Link to="/shipping" className={linkClass}>See rates</Link>
                         </p>
 
                         {colours.length > 0 && (
@@ -194,9 +194,10 @@ function ProductDetail() {
                             <Details title="Delivery">
                                 <p>
                                     We dispatch within {shipping.dispatchDays}, and it usually reaches you
-                                    within {shipping.deliveryDays} after that. Shipping starts at
-                                    {" "}{formatPrice(shipping.rates.tamilNadu.firstKg)} in Tamil Nadu
-                                    and {formatPrice(shipping.rates.restOfIndia.firstKg)} for the rest of India.
+                                    within {shipping.deliveryDays} after that. Orders of {shipping.freeFromItems} or
+                                    more items ship free. For a single item, shipping is
+                                    {" "}{formatPrice(shipping.rates.tamilNadu)} in Tamil Nadu
+                                    and {formatPrice(shipping.rates.restOfIndia)} for most of India.
                                     {" "}<Link to="/shipping" className={linkClass}>Shipping policy</Link>
                                 </p>
                             </Details>

@@ -9,7 +9,7 @@ import { requireAuth } from "./middleware/requireAuth.js"
 import { requireAdmin } from "./middleware/requireAdmin.js"
 import { sendEmail } from "./lib/email.js"
 import { releaseExpiredReservations, cancelAndReleaseStock } from "./lib/releaseExpiredReservations.js"
-import { isServiceablePincode, shippingCost, shippingZone, totalWeight } from "./lib/shipping.js"
+import { isServiceablePincode, itemCount, shippingCost } from "./lib/shipping.js"
 import { getRazorpay, toPaise } from "./lib/razorpay.js"
 import { markOrderPaid, reconcilePayment } from "./lib/confirmPayment.js"
 import { sendQueuedOrderEmails } from "./lib/orderEmails.js"
@@ -707,7 +707,7 @@ app.post("/checkout", requireAuth, checkoutLimit, async (req, res) => {
             // window was already opened, its Razorpay order is for the old
             // total, so the order is rebuilt rather than edited.
             const shippingChanged =
-                shippingCost(totalWeight(existingOrder.items), String(pincode)) !== existingOrder.shippingCost;
+                shippingCost(itemCount(existingOrder.items), String(pincode)) !== existingOrder.shippingCost;
 
             if (contentsChanged || (shippingChanged && cartItems.length > 0)) {
                 // The cart or the shipping changed after checkout started, so
@@ -763,7 +763,7 @@ app.post("/checkout", requireAuth, checkoutLimit, async (req, res) => {
                 orderItems.push({ variantId: item.variantId, quantity: item.quantity, price });
             }
 
-            const shipping = shippingCost(totalWeight(cartItems), String(pincode));
+            const shipping = shippingCost(itemCount(cartItems), String(pincode));
 
             return tx.order.create({
                 data: {

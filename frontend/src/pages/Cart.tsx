@@ -151,6 +151,7 @@ function Cart() {
 
     const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
     const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const freeShipping = itemCount >= shipping.freeFromItems;
     const blocked = lines.some((line) => line.problem);
 
     return (
@@ -215,14 +216,22 @@ function Cart() {
                                 <dt>Subtotal ({itemCount} {itemCount === 1 ? "item" : "items"})</dt>
                                 <dd>{formatPrice(subtotal)}</dd>
                             </div>
-                            <div className="flex justify-between text-muted">
-                                <dt>Shipping</dt>
-                                <dd>At checkout</dd>
-                            </div>
+                            {freeShipping ? (
+                                <div className="flex justify-between">
+                                    <dt>Shipping</dt>
+                                    <dd>Free</dd>
+                                </div>
+                            ) : (
+                                <div className="flex justify-between text-muted">
+                                    <dt>Shipping</dt>
+                                    <dd>At checkout</dd>
+                                </div>
+                            )}
                         </dl>
                         <p className="mt-4 border-t border-stone pt-4 text-xs leading-relaxed text-muted">
-                            Shipping is worked out from your pincode: from {formatPrice(shipping.rates.tamilNadu.firstKg)} in
-                            Tamil Nadu and {formatPrice(shipping.rates.restOfIndia.firstKg)} for the rest of India.
+                            {freeShipping
+                                ? `Free shipping on orders of ${shipping.freeFromItems} or more items.`
+                                : `Add one more item for free shipping. For a single item, shipping is ${formatPrice(shipping.rates.tamilNadu)} in Tamil Nadu and ${formatPrice(shipping.rates.restOfIndia)} for most of India.`}
                         </p>
                         {blocked ? (
                             <>

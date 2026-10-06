@@ -11,7 +11,7 @@ import { usePageTitle } from "../lib/usePageTitle"
 import { trackBeginCheckout, trackPurchase } from "../lib/analytics"
 import type { TrackedItem } from "../lib/analytics"
 import type { OrderView } from "../lib/orders"
-import { returns } from "../lib/business"
+import { returns, shipping } from "../lib/business"
 import { inputClass, linkClass } from "../lib/styles"
 import { Button, ButtonLink, Container, EmptyState, ErrorState, Field, Notice, PageHeader, PageLoading, Spinner } from "../components/ui"
 import { MergeNotice } from "../components/MergeNotice"
@@ -396,6 +396,7 @@ function Steps({ current }: { current: 1 | 2 }) {
 
 function OrderSummary({ lines, order }: { lines: SummaryLine[]; order: Order | null }) {
     const subtotal = order?.subtotal ?? lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+    const freeShipping = lines.reduce((sum, line) => sum + line.quantity, 0) >= shipping.freeFromItems;
 
     return (
         <>
@@ -426,8 +427,8 @@ function OrderSummary({ lines, order }: { lines: SummaryLine[]; order: Order | n
                 </div>
                 <div className="flex justify-between">
                     <dt>Shipping</dt>
-                    <dd className={order ? "" : "text-muted"}>
-                        {order ? (order.shippingCost ? formatPrice(order.shippingCost) : "Free") : "Next step"}
+                    <dd className={order || freeShipping ? "" : "text-muted"}>
+                        {order ? (order.shippingCost ? formatPrice(order.shippingCost) : "Free") : freeShipping ? "Free" : "Next step"}
                     </dd>
                 </div>
                 {order && (

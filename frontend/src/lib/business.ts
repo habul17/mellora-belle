@@ -18,7 +18,7 @@ export const business = {
         name: "Marteena Jency Vincent",
         designation: "Grievance Officer",
     },
-    policiesUpdated: "25 September 2026",
+    policiesUpdated: "6 October 2026",
     // Shown on every product page: the Consumer Protection (E-Commerce) Rules
     // 2020 ask sellers to state it. To confirm with the owner.
     countryOfOrigin: "India",
@@ -27,13 +27,16 @@ export const business = {
 export const shipping = {
     dispatchDays: "1-2 working days",
     deliveryDays: "3-7 working days",
-    // Rupees: the first kilo, then each extra kilo or part of one. For display
-    // only. Checkout charges SHIPPING_RATES in backend/src/lib/shipping.ts,
-    // so change both together.
+    // Rupees per order with a single item; orders of freeFromItems or more
+    // ship free. For display only. Checkout charges SHIPPING_RATES and
+    // FREE_SHIPPING_FROM_ITEMS in backend/src/lib/shipping.ts, so change both
+    // together.
     rates: {
-        tamilNadu: { firstKg: 60, perExtraKg: 30 },
-        restOfIndia: { firstKg: 90, perExtraKg: 50 },
+        tamilNadu: 89,
+        restOfIndia: 109,
+        remote: 149,
     },
+    freeFromItems: 2,
 };
 
 export const returns = {

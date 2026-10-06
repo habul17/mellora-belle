@@ -32,23 +32,29 @@ function Shipping() {
             <section>
                 <h2>Shipping charges</h2>
                 <p>
-                    Shipping depends on where you are and how heavy your order is. We ship from
-                    Coimbatore, so orders within Tamil Nadu cost less.
+                    Orders of {shipping.freeFromItems} or more items ship free anywhere we deliver.
+                    For a single item, shipping depends on where you are. We ship from Coimbatore,
+                    so orders within Tamil Nadu cost less.
                 </p>
                 <table>
                     <thead>
-                        <tr><th>Delivering to</th><th>Up to 1 kg</th><th>Each extra kg (or part of one)</th></tr>
+                        <tr><th>Delivering to</th><th>1 item</th><th>{shipping.freeFromItems} or more items</th></tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td>Tamil Nadu and Puducherry</td>
-                            <td>₹{shipping.rates.tamilNadu.firstKg}</td>
-                            <td>₹{shipping.rates.tamilNadu.perExtraKg}</td>
+                            <td>₹{shipping.rates.tamilNadu}</td>
+                            <td>Free</td>
                         </tr>
                         <tr>
                             <td>Rest of India</td>
-                            <td>₹{shipping.rates.restOfIndia.firstKg}</td>
-                            <td>₹{shipping.rates.restOfIndia.perExtraKg}</td>
+                            <td>₹{shipping.rates.restOfIndia}</td>
+                            <td>Free</td>
+                        </tr>
+                        <tr>
+                            <td>North-East states, Sikkim, Jammu &amp; Kashmir and Ladakh</td>
+                            <td>₹{shipping.rates.remote}</td>
+                            <td>Free</td>
                         </tr>
                     </tbody>
                 </table>

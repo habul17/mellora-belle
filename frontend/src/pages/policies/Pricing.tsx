@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { business } from "../../lib/business";
+import { business, shipping } from "../../lib/business";
 import PolicyPage from "../../components/PolicyPage";
 
 function Pricing() {
@@ -27,8 +27,9 @@ function Pricing() {
             <section>
                 <h2>What you pay</h2>
                 <p>
-                    You pay the product price plus shipping, which depends on your pincode and
-                    your order's weight (see <Link to="/shipping">Shipping &amp; Delivery</Link>).
+                    You pay the product price plus shipping. Orders of {shipping.freeFromItems} or
+                    more items ship free; for a single item, shipping depends on your pincode
+                    (see <Link to="/shipping">Shipping &amp; Delivery</Link>).
                     Your checkout page shows the full total before you pay. There are no hidden
                     charges.
                 </p>
