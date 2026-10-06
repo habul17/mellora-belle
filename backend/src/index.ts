@@ -1205,6 +1205,7 @@ app.post("/webhooks/courier", async (req, res) => {
     const given = req.headers["x-api-key"];
 
     if (typeof given !== "string" || !sameSecret(given, expected)) {
+        console.warn("Courier webhook refused: wrong or missing token");
         return res.status(401).json({ error: "Invalid token" });
     }
 
@@ -1214,6 +1215,7 @@ app.post("/webhooks/courier", async (req, res) => {
     const status = parsed.success ? (parsed.data.current_status ?? parsed.data.shipment_status) : undefined;
 
     if (!parsed.success || !status) {
+        console.log("Courier webhook received, nothing to record (a test, or an update we can't read)");
         return res.json({ received: true });
     }
 
@@ -1225,6 +1227,8 @@ app.post("/webhooks/courier", async (req, res) => {
             isReturn: [1, true, "1", "true"].includes(parsed.data.is_return as never),
         });
 
+        // "unknown" is an AWB that isn't ours, such as Shiprocket's test.
+        console.log(`Courier webhook for AWB ${parsed.data.awb}: ${status} (${result})`);
         res.json({ received: true, result });
 
     } catch (err) {
