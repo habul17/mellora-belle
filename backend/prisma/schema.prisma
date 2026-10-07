@@ -274,6 +274,8 @@ enum OrderEmailKind {
   CANCELLATION_DECLINED
   RETURN_DECLINED
   REFUND_ISSUED
+  // To the shop's inbox: a new paid order to pack.
+  NEW_ORDER
 }
 
 // An outbox: a row is written in the same transaction that changes the order,

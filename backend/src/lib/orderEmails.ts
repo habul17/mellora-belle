@@ -2,6 +2,7 @@ import { prisma } from "./prisma.js"
 import { sendEmail } from "./email.js"
 import { store } from "./store.js"
 import { siteUrl } from "./site.js"
+import { CANCEL_WINDOW_MS } from "./orderStatus.js"
 import type { OrderEmailKind } from "../generated/prisma/enums.js"
 
 // Every order email is a row in OrderEmail, written in the same transaction
@@ -133,6 +134,27 @@ export function orderShippedEmail(order: EmailOrder) {
     };
 }
 
+// To the shop's own inbox: a new paid order to pack. The customer can still
+// cancel for an hour after paying, so it says when that window closes.
+function newOrderForShopEmail(order: EmailOrder) {
+    const cancelUntil = new Date((order.paidAt ?? order.createdAt).getTime() + CANCEL_WINDOW_MS)
+        .toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" });
+
+    return {
+        subject: `New order #${order.number}: ${rupees(order.totalAmount)}`,
+        html: `
+            <p><strong>New order #${order.number}</strong>, paid ${rupees(order.totalAmount)}.</p>
+            ${itemsTable(order)}
+            <p>
+                <strong>Ship to</strong><br>
+                ${address(order)}<br>
+                Email: ${escapeHtml(order.user.email)}
+            </p>
+            <p>The customer can cancel until ${cancelUntil}. Pack it after that, within ${store.dispatchDays}.</p>
+            <p><a href="${siteUrl()}/admin/orders">Open the orders page</a></p>`
+    };
+}
+
 // To the shop's own inbox: a customer is waiting for the owner to act.
 function requestForShopEmail(order: EmailOrder, what: "cancel" | "return") {
     const heading = what === "cancel" ? "Cancellation requested" : "Return requested";
@@ -210,6 +232,7 @@ function buildEmail(kind: OrderEmailKind, order: EmailOrder) {
         case "CANCELLATION_DECLINED": return { to: order.user.email, ...requestDeclinedEmail(order, "cancel") };
         case "RETURN_DECLINED": return { to: order.user.email, ...requestDeclinedEmail(order, "return") };
         case "REFUND_ISSUED": return { to: order.user.email, ...refundIssuedEmail(order) };
+        case "NEW_ORDER": return { to: store.email, ...newOrderForShopEmail(order) };
     }
 }
 

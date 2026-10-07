@@ -21,7 +21,7 @@ export function describeStatus(status: OrderStatus) {
 
 // The Cancellation & Refunds policy (frontend/src/lib/business.ts `returns`)
 // promises these windows. Change both together.
-const CANCEL_WINDOW_MS = 60 * 60 * 1000;
+export const CANCEL_WINDOW_MS = 60 * 60 * 1000;
 const RETURN_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 type RequestableOrder = {

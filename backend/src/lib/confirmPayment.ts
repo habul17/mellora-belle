@@ -99,9 +99,10 @@ export async function markOrderPaid(
         });
 
         // Owed in the same transaction as the PAID status itself, so a paid
-        // order can never exist without its confirmation email queued.
+        // order can never exist without its confirmation email, and the
+        // shop's notice to pack it, queued.
         await tx.orderEmail.createMany({
-            data: [{ orderId: order.id, kind: "ORDER_CONFIRMED" }],
+            data: [{ orderId: order.id, kind: "ORDER_CONFIRMED" }, { orderId: order.id, kind: "NEW_ORDER" }],
             skipDuplicates: true
         });
 
