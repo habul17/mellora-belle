@@ -184,6 +184,8 @@ function Checkout() {
             amount: data.amount,
             currency: "INR",
             name: "Mellora Belle",
+            // The logo at the top of Razorpay's window (it wants a square of 256px or more).
+            image: `${window.location.origin}/icon-512.png`,
             description: `Order #${order.number}`,
             prefill: { name: order.fullName, contact: order.phone },
             theme: { color: "#5a2848" },
