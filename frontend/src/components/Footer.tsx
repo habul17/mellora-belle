@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
 import { business, policyLinks } from "../lib/business";
 import { containerClass, eyebrowClass } from "../lib/styles";
+import { Logo } from "./Logo";
 
 function Footer() {
     return (
         <footer className="mt-24 border-t border-stone bg-sand">
             <div className={`${containerClass} grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4`}>
                 <div className="lg:col-span-2">
-                    <Link to="/" className="font-serif text-3xl">{business.name}</Link>
-                    <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
+                    <Link to="/" className="inline-block"><Logo size="footer" /></Link>
+                    <p className="mt-4 font-serif text-xl text-plum italic">{business.tagline}</p>
+                    <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">
                         Designer kurthis and co-ord sets from {business.city}, shipped across India.
                     </p>
                 </div>

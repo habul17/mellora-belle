@@ -20,8 +20,10 @@ export const business = {
     },
     policiesUpdated: "6 October 2026",
     // Shown on every product page: the Consumer Protection (E-Commerce) Rules
-    // 2020 ask sellers to state it. To confirm with the owner.
+    // 2020 ask sellers to state it. Confirmed by the owner, 7 October 2026.
     countryOfOrigin: "India",
+    // The line under the name on the owner's logo.
+    tagline: "Wear Your Confidence",
 };
 
 export const shipping = {

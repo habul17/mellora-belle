@@ -6,6 +6,7 @@ import { onCartChange } from "../lib/cartCount"
 import { containerClass } from "../lib/styles"
 import { shipping } from "../lib/business"
 import { BagIcon, CloseIcon, MenuIcon, UserIcon } from "./icons"
+import { Logo } from "./Logo"
 
 const guestCartCount = () => getGuestCart().reduce((sum, item) => sum + item.quantity, 0);
 
@@ -79,9 +80,9 @@ function Header() {
                         </nav>
                     </div>
 
-                    <Link to="/" className="font-serif text-2xl tracking-[0.06em] sm:text-3xl">Mellora Belle</Link>
+                    <Link to="/"><Logo /></Link>
 
-                    <div className="flex items-center justify-end gap-6">
+                    <div className="flex items-center justify-end gap-4 sm:gap-6">
                         <nav className="hidden items-center gap-6 lg:flex">
                             {loggedIn ? (
                                 <>
@@ -115,7 +116,7 @@ function Header() {
                     <div className="absolute inset-0 bg-ink/40" onClick={() => setMenuOpen(false)} />
                     <nav className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col bg-ivory px-6 py-5 shadow-xl">
                         <div className="mb-8 flex items-center justify-between">
-                            <span className="font-serif text-2xl">Mellora Belle</span>
+                            <Logo size="menu" />
                             <button type="button" className="-mr-2 p-2" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
                                 <CloseIcon />
                             </button>
