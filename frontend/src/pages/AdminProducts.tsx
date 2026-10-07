@@ -154,7 +154,7 @@ function ProductForm({ draft, setDraft, categories, isNew }: {
                 <label>Original price (₹, optional, shown crossed out) <input type="number" min={1} value={draft.compareAtPrice} onChange={set("compareAtPrice")} style={{ width: "7em" }} /></label>
             </p>
             <p>
-                <label>Packed weight (grams, sets the shipping charge) <input type="number" min={1} value={draft.weight} onChange={set("weight")} style={{ width: "7em" }} /></label>
+                <label>Packed weight (grams, sent to the courier when booking) <input type="number" min={1} value={draft.weight} onChange={set("weight")} style={{ width: "7em" }} /></label>
                 <label>Colour <input value={draft.color} onChange={set("color")} maxLength={50} /></label>
             </p>
             <p>
