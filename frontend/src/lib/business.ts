@@ -18,7 +18,7 @@ export const business = {
         name: "Marteena Jency Vincent",
         designation: "Grievance Officer",
     },
-    policiesUpdated: "6 October 2026",
+    policiesUpdated: "9 October 2026",
     // Shown on every product page: the Consumer Protection (E-Commerce) Rules
     // 2020 ask sellers to state it. Confirmed by the owner, 7 October 2026.
     countryOfOrigin: "India",
@@ -32,7 +32,7 @@ export const shipping = {
     // Rupees per order with a single item; orders of freeFromItems or more
     // ship free. For display only. Checkout charges SHIPPING_RATES and
     // FREE_SHIPPING_FROM_ITEMS in backend/src/lib/shipping.ts, so change both
-    // together.
+    // together (and the search description in index.html, which names it).
     rates: {
         tamilNadu: 89,
         restOfIndia: 109,

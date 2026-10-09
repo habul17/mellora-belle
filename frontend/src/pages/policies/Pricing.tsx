@@ -42,8 +42,8 @@ function Pricing() {
             <section>
                 <h2>How to pay</h2>
                 <p>
-                    All orders are paid online at checkout through Razorpay, using a debit or
-                    credit card, net banking, a wallet or any other method Razorpay offers
+                    All orders are paid online at checkout through Razorpay, using UPI, a debit
+                    or credit card, net banking, a wallet or any other method Razorpay offers
                     there. We don't offer cash on delivery yet.
                 </p>
             </section>
