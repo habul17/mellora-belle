@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js"
 import type { Prisma } from "../generated/prisma/client.js"
+import { reportError } from "./monitoring.js"
 
 // Records one admin change (see the AuditLog model). Called after the change
 // has succeeded. A failure here is logged but never undoes or fails the
@@ -10,6 +11,6 @@ export async function audit(actorId: string, action: string, entityType: string,
             data: { actorId, action, entityType, entityId, ...(details !== undefined && { details }) },
         });
     } catch (err) {
-        console.error(`Audit log write failed for ${action} on ${entityType} ${entityId}`, err);
+        reportError(err, `Audit log write failed for ${action} on ${entityType} ${entityId}`);
     }
 }

@@ -1,3 +1,5 @@
+import { reportProblem } from "./monitoring.js"
+
 // A small client for the parts of Shiprocket's API the shop uses: log in,
 // create an order, assign a courier (AWB), request pickup, make the label,
 // and cancel. Everything else (couriers, wallet, pickup addresses) is set up
@@ -101,7 +103,7 @@ export async function checkShiprocketLogin() {
         await token();
         console.log("Shiprocket login OK");
     } catch (err) {
-        console.warn(`WARNING: ${(err as Error).message}. Check SHIPROCKET_EMAIL and SHIPROCKET_PASSWORD.`);
+        reportProblem(`WARNING: Shiprocket login failed: ${(err as Error).message}. Check SHIPROCKET_EMAIL and SHIPROCKET_PASSWORD.`);
     }
 }
 

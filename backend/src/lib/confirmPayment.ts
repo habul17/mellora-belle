@@ -2,6 +2,7 @@ import { Prisma } from "../generated/prisma/client.js"
 import { prisma } from "./prisma.js"
 import { getRazorpay } from "./razorpay.js"
 import { sendQueuedOrderEmails } from "./orderEmails.js"
+import { reportError, reportProblem } from "./monitoring.js"
 
 export type MarkPaidResult = "paid" | "already-paid" | "refund-needed";
 
@@ -79,7 +80,7 @@ export async function markOrderPaid(
                 // The payment stays recorded as PAID (the money really did
                 // arrive) while the order stays CANCELLED. That pairing is how
                 // the admin spots an order that needs a refund.
-                console.log(`REFUND NEEDED: order ${order.id} was paid (${razorpayPaymentId}) after its items sold out`);
+                reportProblem(`Refund needed: order #${order.number} was paid (${razorpayPaymentId}) after its items sold out`, ["refund-needed", order.id]);
                 return "refund-needed";
             }
 
@@ -113,7 +114,7 @@ export async function markOrderPaid(
         // Sent after the commit and not awaited: the payment is already safe,
         // and a slow or failing email provider must not delay the webhook's
         // answer to Razorpay. A failed send is retried by the regular sweep.
-        sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+        sendQueuedOrderEmails().catch((err) => reportError(err, "Sending order emails failed"));
     }
 
     return result;

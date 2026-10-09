@@ -16,6 +16,8 @@ function AdminSecurity() {
     const [message, setMessage] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [alertMessage, setAlertMessage] = useState("");
+    const [alertBusy, setAlertBusy] = useState(false);
 
     useEffect(() => {
         if (!token) return;
@@ -69,6 +71,19 @@ function AdminSecurity() {
         }
     }
 
+    async function testAlert() {
+        setAlertBusy(true);
+        setAlertMessage("");
+        try {
+            const data = await authFetch("/admin/test-alert", { method: "POST" });
+            setAlertMessage(data.message ?? data.error ?? "Something went wrong");
+        } catch {
+            setAlertMessage("Could not reach the server");
+        } finally {
+            setAlertBusy(false);
+        }
+    }
+
     return (
         <main className="admin">
             <AdminNav />
@@ -117,6 +132,16 @@ function AdminSecurity() {
                 {" "}<code>backend/scripts/reset-admin-2fa.ts</code>). Then log in with your password and set it up
                 again here on the new phone.
             </p>
+
+            <h2>Error alerts</h2>
+            <p>
+                When something on the site breaks, or an order needs you (a refund owed, a parcel Shiprocket
+                couldn't book, an order email that didn't send), Sentry emails the shop's Gmail.
+            </p>
+            <p>
+                <button onClick={testAlert} disabled={alertBusy}>Send a test alert</button>
+            </p>
+            {alertMessage && <p><strong>{alertMessage}</strong></p>}
         </main>
     );
 }

@@ -4,6 +4,7 @@ import { store } from "./store.js"
 import { siteUrl } from "./site.js"
 import { CANCEL_WINDOW_MS } from "./orderStatus.js"
 import type { OrderEmailKind } from "../generated/prisma/enums.js"
+import { reportError, reportProblem } from "./monitoring.js"
 
 // Every order email is a row in OrderEmail, written in the same transaction
 // that changed the order (paid, shipped, a cancellation or return request,
@@ -267,6 +268,9 @@ async function sendOne(emailId: string) {
         const message = err instanceof Error ? err.message : String(err);
 
         console.log(`Order #${order.number} ${email.kind} email failed (attempt ${attempts} of ${MAX_ATTEMPTS}): ${message}`);
+        // One alert when it first fails, and another if every retry fails.
+        if (attempts === 1) reportProblem(`Order #${order.number} ${email.kind} email failed, retrying: ${message}`, ["order-email", order.id, email.kind]);
+        if (attempts === MAX_ATTEMPTS) reportProblem(`Order #${order.number} ${email.kind} email gave up after ${MAX_ATTEMPTS} tries: ${message}`, ["order-email-gave-up", order.id, email.kind]);
 
         await prisma.orderEmail.update({
             where: { id: email.id },
@@ -296,7 +300,7 @@ export async function sendQueuedOrderEmails() {
             await sendOne(id);
         } catch (err) {
             // A database error on one email must not stop the rest.
-            console.log("Could not process order email", id, err);
+            reportError(err, `Could not process order email ${id}`);
         }
     }
 }

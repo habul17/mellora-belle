@@ -50,7 +50,7 @@ function Privacy() {
                 <ul>
                     <li>Razorpay, to take your payment.</li>
                     <li>Courier partners, who need your name, phone number and address to deliver your order.</li>
-                    <li>The service providers that host our website and database and send our emails.</li>
+                    <li>The service providers that host our website and database, send our emails, and tell us when something on the site breaks.</li>
                     {trackers && <li>{trackers}, to measure visits and our ads (see "Your browser" below).</li>}
                     <li>Government authorities, only when the law requires it.</li>
                 </ul>

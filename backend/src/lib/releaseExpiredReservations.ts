@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js"
 import { reconcilePayment } from "./confirmPayment.js"
+import { reportError } from "./monitoring.js"
 
 type ReleasableOrder = {
     id: string;
@@ -58,7 +59,7 @@ export async function releaseExpiredReservations() {
 
             if (released) releasedCount++;
         } catch (err) {
-            console.log(`Failed to release reservation for order ${order.id}`, err);
+            reportError(err, `Failed to release reservation for order ${order.id}`);
         }
     }
 

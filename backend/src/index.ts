@@ -30,10 +30,12 @@ import { checkShiprocketLogin, shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
 import { ProductAdminError, createProduct, updateProduct, addSize, listAdminProducts } from "./lib/productAdmin.js"
 import { siteOrigins, siteUrl } from "./lib/site.js"
+import { startMonitoring, monitoringOn, reportError, reportProblem, sendTestAlert } from "./lib/monitoring.js"
 
 
 dotenv.config();
 checkEnv();
+startMonitoring();
 
 // Accept the code before and after the current one too (a 90-second window),
 // so a phone clock a few seconds out doesn't lock the admin out.
@@ -126,7 +128,7 @@ app.post("/login", ...loginLimits, async (req, res) => {
         const accessToken = await startSession(res, user);
         res.json({ accessToken });
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "something went wrong" })
     }
 })
@@ -149,7 +151,7 @@ app.post("/login-code", ...loginCodeLimits, async (req, res) => {
         if (err instanceof LoginCodeError) {
             return res.status(err.httpStatus).json({ error: err.message });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -169,7 +171,7 @@ app.post("/login-code/verify", verifyLoginCodeLimit, async (req, res) => {
         if (err instanceof LoginCodeError) {
             return res.status(err.httpStatus).json({ error: err.message });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -209,13 +211,13 @@ app.post("/forgot-password", ...forgotPasswordLimits, async (req, res) => {
         } catch (err) {
             // Logged, but answered exactly like success. An error only for
             // emails that have an account would tell anyone which emails do.
-            console.log("Password reset email failed", err);
+            reportError(err, "Password reset email failed");
         }
 
         res.json({ message: "If that email exists, a reset link has been sent" })
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -235,7 +237,7 @@ app.post("/auth/refresh", refreshLimit, async (req, res) => {
         }
         res.json({ accessToken });
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -249,7 +251,7 @@ app.post("/auth/logout", async (req, res) => {
         await endSession(req, res);
         res.json({ message: "Logged out" });
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -259,6 +261,18 @@ app.get("/admin/2fa", requireAuth, requireAdmin, async (req, res) => {
     const userId = (req as any).user.userId;
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { totpSecret: true } });
     res.json({ enabled: Boolean(user.totpSecret) });
+})
+
+// The Security page's "Send a test alert": proves the whole path, from this
+// server to Sentry to the email in the shop's inbox.
+app.post("/admin/test-alert", requireAuth, requireAdmin, async (req, res) => {
+    if (!monitoringOn()) {
+        return res.status(503).json({ error: "Alerts aren't switched on: SENTRY_DSN isn't set on the server." });
+    }
+    if (!(await sendTestAlert())) {
+        return res.status(502).json({ error: "Sentry didn't answer. Try again in a minute." });
+    }
+    res.json({ message: "Sent. The email should arrive within a few minutes." });
 })
 
 // Step 1 of 2: a new secret to scan. It isn't used for logging in until step 2
@@ -281,7 +295,7 @@ app.post("/admin/2fa/setup", requireAuth, requireAdmin, async (req, res) => {
         res.json({ secret, qrCodeImage });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({
             error: "Something went wrong"
         });
@@ -372,7 +386,7 @@ app.post("/reset-password", resetPasswordLimit, async (req, res) => {
         res.json({ message: "Password reset Successful " })
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" })
     }
 })
@@ -418,7 +432,7 @@ function productAdminFailed(res: express.Response, err: unknown) {
     if (err instanceof ProductAdminError) {
         return res.status(err.httpStatus).json({ error: err.message });
     }
-    console.log(err);
+    reportError(err);
     res.status(500).json({ error: "Something went wrong" });
 }
 
@@ -496,7 +510,7 @@ app.patch("/variants/:id/stock", requireAuth, requireAdmin, async (req, res) => 
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
             return res.status(404).json({ error: "Variant not found" })
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" })
     }
 
@@ -545,7 +559,7 @@ app.post("/cart/items", requireAuth, async (req, res) => {
         res.json({ cartItem });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({
             error: "Something went wrong"
         })
@@ -577,7 +591,7 @@ app.get("/cart", requireAuth, async (req, res) => {
         res.json({ cart });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 })
@@ -617,7 +631,7 @@ app.patch("/cart/items/:id", requireAuth, async (req, res) => {
         res.json({ cartItem: updatedItem });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 
@@ -644,7 +658,7 @@ app.delete("/cart/items/:id", requireAuth, async (req, res) => {
         res.json({ message: "Item removed from cart" });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -797,7 +811,7 @@ app.post("/checkout", requireAuth, checkoutLimit, async (req, res) => {
                 error: `Sorry, ${err.message.replace("UNAVAILABLE:", "")} is no longer available. Please remove it from your cart.`
             });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -874,7 +888,7 @@ app.post("/orders/:id/payment", requireAuth, checkoutLimit, async (req, res) => 
         if (err instanceof Error && err.message === "RAZORPAY_KEYS_MISSING") {
             return res.status(500).json({ error: "Payments are not configured yet" });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -913,7 +927,7 @@ app.post("/orders/:id/confirm-payment", requireAuth, checkoutLimit, async (req, 
         });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -933,7 +947,7 @@ app.get("/orders", requireAuth, async (req, res) => {
         res.json({ orders: orders.map(toOrderView) });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -956,7 +970,7 @@ app.get("/orders/:id", requireAuth, async (req, res) => {
         res.json({ order: toOrderView(order) });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -978,7 +992,7 @@ app.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
         res.json({ orders: orders.map(toAdminOrderView), shiprocket: shiprocketEnabled() });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -1079,7 +1093,7 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
         await audit((req as any).user.userId, "order.status", "Order", id, JSON.parse(JSON.stringify({ from, to: status, ...tracking })));
 
         if (status === "SHIPPED") {
-            sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+            sendQueuedOrderEmails().catch((err) => reportError(err, "Sending order emails failed"));
         }
         processShipmentsSoon();
 
@@ -1088,7 +1102,7 @@ app.patch("/admin/orders/:id/status", requireAuth, requireAdmin, async (req, res
         res.json({ order: toAdminOrderView(order) });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -1122,7 +1136,7 @@ async function orderRequestRoute(
         if (err instanceof OrderRequestError) {
             return res.status(err.httpStatus).json({ error: err.message });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 }
@@ -1179,7 +1193,7 @@ app.post("/admin/orders/:id/shipment", requireAuth, requireAdmin, async (req, re
         if (err instanceof ShipmentActionError) {
             return res.status(err.httpStatus).json({ error: err.message });
         }
-        console.log(err);
+        reportError(err);
         res.status(500).json({ error: "Something went wrong" });
     }
 });
@@ -1232,7 +1246,7 @@ app.post("/webhooks/courier", async (req, res) => {
         res.json({ received: true, result });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         // A 500 makes Shiprocket try again later, which is what we want if
         // our own database was briefly unavailable.
         res.status(500).json({ error: "Something went wrong" });
@@ -1307,7 +1321,7 @@ app.post("/webhooks/razorpay", async (req, res) => {
         }
 
         if (entity.amount !== payment.amount) {
-            console.log(`Amount mismatch on ${payment.id}: paid ${entity.amount}, expected ${payment.amount}`);
+            reportProblem(`Amount mismatch on payment ${payment.id}: paid ${entity.amount}, expected ${payment.amount}`, ["amount-mismatch", payment.id]);
             return res.json({ received: true });
         }
 
@@ -1317,7 +1331,7 @@ app.post("/webhooks/razorpay", async (req, res) => {
         res.json({ received: true });
 
     } catch (err) {
-        console.log(err);
+        reportError(err);
         // A 500 tells Razorpay to retry, which is what we want if our own
         // database was briefly unavailable.
         res.status(500).json({ error: "Something went wrong" });
@@ -1356,23 +1370,23 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
         return res.status(413).json({ error: "The request is too large" });
     }
 
-    console.error(`${req.method} ${req.path} failed:`, err);
+    reportError(err, `${req.method} ${req.path} failed`);
 
     if (res.headersSent) return next(err);
     res.status(500).json({ error: "Something went wrong" });
 });
 
 process.on("unhandledRejection", (reason) => {
-    console.error("Unhandled promise rejection:", reason);
+    reportError(reason, "Unhandled promise rejection");
 });
 
 
 setInterval(() => {
-    releaseExpiredReservations().catch((err) => console.log("Reservation cleanup failed", err));
+    releaseExpiredReservations().catch((err) => reportError(err, "Reservation cleanup failed"));
     // Retries any order email whose first send failed.
-    sendQueuedOrderEmails().catch((err) => console.log("Sending queued emails failed", err));
+    sendQueuedOrderEmails().catch((err) => reportError(err, "Sending queued emails failed"));
     // Books packed orders with Shiprocket, retrying failures.
-    processShipments().catch((err) => console.log("Processing shipments failed", err));
+    processShipments().catch((err) => reportError(err, "Processing shipments failed"));
 }, CLEANUP_INTERVAL_MINUTES * 60 * 1000);
 
 app.listen(process.env.PORT || 4000, () => {

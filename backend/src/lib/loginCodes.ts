@@ -5,6 +5,7 @@ import { sendEmail } from "./email.js"
 import { store } from "./store.js"
 import { siteUrl } from "./site.js"
 import { findUserByEmail } from "./auth.js"
+import { reportError } from "./monitoring.js"
 
 // Customers log in with a 6-digit code emailed to them, so there's no
 // password to choose, forget or reuse. The account is created the first time
@@ -85,7 +86,7 @@ export async function sendLoginCode(email: string) {
     try {
         await sendEmail(email, message.subject, message.html);
     } catch (err) {
-        console.log("Login code email failed", err);
+        reportError(err, "Login code email failed");
         if (codeId) await prisma.loginCode.deleteMany({ where: { id: codeId } });
         throw new LoginCodeError(502, "We couldn't send the email just now. Please try again in a minute.");
     }

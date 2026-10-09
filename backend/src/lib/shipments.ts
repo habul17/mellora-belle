@@ -6,6 +6,7 @@ import { sendQueuedOrderEmails } from "./orderEmails.js"
 import { describeStatus } from "./orderStatus.js"
 import type { Prisma } from "../generated/prisma/client.js"
 import type { Shipment } from "../generated/prisma/client.js"
+import { reportError, reportProblem } from "./monitoring.js"
 
 // Booking parcels with Shiprocket, and what the courier tells us afterwards.
 //
@@ -347,6 +348,9 @@ async function processOne(shipmentId: string) {
         const what = shipment.status === "CANCELLING" ? "cancel" : "booking";
 
         console.log(`Order #${order.number} Shiprocket ${what} failed (attempt ${attempts} of ${MAX_ATTEMPTS}): ${message}`);
+        // One alert when it first fails, and another if every retry fails.
+        if (attempts === 1) reportProblem(`Order #${order.number} Shiprocket ${what} failed, retrying: ${message}`, ["shiprocket", what, order.id]);
+        if (attempts >= MAX_ATTEMPTS) reportProblem(`Order #${order.number} Shiprocket ${what} gave up after ${MAX_ATTEMPTS} tries: ${message}`, ["shiprocket-gave-up", what, order.id]);
 
         await prisma.shipment.updateMany({
             where: { id: shipment.id, status: shipment.status },
@@ -372,13 +376,13 @@ export async function processShipments() {
             await processOne(id);
         } catch (err) {
             // A database error on one shipment must not stop the rest.
-            console.log("Could not process shipment", id, err);
+            reportError(err, `Could not process shipment ${id}`);
         }
     }
 }
 
 export function processShipmentsSoon() {
-    processShipments().catch((err) => console.log("Processing shipments failed", err));
+    processShipments().catch((err) => reportError(err, "Processing shipments failed"));
 }
 
 // ---- Tracking updates from the courier (Shiprocket's webhook) ----
@@ -454,7 +458,7 @@ export async function applyCourierUpdate(update: CourierUpdate): Promise<"unknow
             }
             return result.count > 0;
         });
-        if (moved) sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+        if (moved) sendQueuedOrderEmails().catch((err) => reportError(err, "Sending order emails failed"));
     }
 
     if (step === "DELIVERED") {

@@ -18,7 +18,7 @@ export const business = {
         name: "Marteena Jency Vincent",
         designation: "Grievance Officer",
     },
-    policiesUpdated: "9 October 2026",
+    policiesUpdated: "10 October 2026",
     // Shown on every product page: the Consumer Protection (E-Commerce) Rules
     // 2020 ask sellers to state it. Confirmed by the owner, 7 October 2026.
     countryOfOrigin: "India",

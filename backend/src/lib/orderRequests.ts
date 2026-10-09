@@ -3,6 +3,7 @@ import { sendQueuedOrderEmails } from "./orderEmails.js"
 import { cancelDeadline, returnDeadline, describeStatus } from "./orderStatus.js"
 import type { OrderStatus } from "../generated/prisma/enums.js"
 import { stopBooking, processShipmentsSoon } from "./shipments.js"
+import { reportError } from "./monitoring.js"
 
 // Cancellations, returns and refunds. Refunds themselves are made by hand in
 // the Razorpay dashboard; this records them. Every change is conditional on
@@ -22,7 +23,7 @@ const TEXT_MAX = 500;
 const CHANGED = "This order just changed. Refresh to see its latest state.";
 
 function sendEmailsSoon() {
-    sendQueuedOrderEmails().catch((err) => console.log("Sending order emails failed", err));
+    sendQueuedOrderEmails().catch((err) => reportError(err, "Sending order emails failed"));
 }
 
 async function findOwnOrder(orderId: string, userId: string) {
