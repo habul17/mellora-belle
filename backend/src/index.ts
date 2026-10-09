@@ -24,7 +24,7 @@ import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
 import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
 import { loginLimits, loginCodeLimits, verifyLoginCodeLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
-import { robotsTxt, sitemapXml } from "./lib/seo.js"
+import { sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
 import { checkShiprocketLogin, shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
@@ -1330,12 +1330,10 @@ app.get("/health", (req, res) => {
     })
 })
 
-// Served on the shop's own domain through Vercel rewrites (frontend/vercel.json),
+// Served on the shop's own domain through a Vercel rewrite (frontend/vercel.json),
 // built here because only the backend knows which products are for sale.
-app.get("/robots.txt", (req, res) => {
-    res.type("text/plain").send(robotsTxt());
-})
-
+// robots.txt is a fixed file in frontend/public instead: Render answers it with
+// "Disallow: /" while this server sleeps.
 app.get("/sitemap.xml", async (req, res) => {
     res.type("application/xml").send(await sitemapXml());
 })

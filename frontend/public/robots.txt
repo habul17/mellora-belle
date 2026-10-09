@@ -1,0 +1,16 @@
+# A fixed file, not built by the API: while Render's free plan has the API
+# asleep, Render answers /robots.txt itself with "Disallow: /", which told
+# Google to stay off the whole shop.
+# Pages for one person (cart, orders, account) or for the admin stay out of
+# search results.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+
+Sitemap: https://www.mellorabelle.com/sitemap.xml

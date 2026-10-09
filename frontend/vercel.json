@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/robots.txt", "destination": "https://api.mellorabelle.com/robots.txt" },
     { "source": "/sitemap.xml", "destination": "https://api.mellorabelle.com/sitemap.xml" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

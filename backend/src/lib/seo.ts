@@ -1,21 +1,6 @@
 import { prisma } from "./prisma.js"
 import { siteUrl } from "./site.js"
 
-// Pages that are for one person (their cart, orders, account) or for the
-// admin are kept out of search results.
-const PRIVATE_PATHS = ["/admin", "/cart", "/checkout", "/orders", "/login", "/forgot-password", "/reset-password"];
-
-export function robotsTxt() {
-    return [
-        "User-agent: *",
-        "Allow: /",
-        ...PRIVATE_PATHS.map((path) => `Disallow: ${path}`),
-        "",
-        `Sitemap: ${siteUrl()}/sitemap.xml`,
-        "",
-    ].join("\n");
-}
-
 const PUBLIC_PAGES = ["/", "/shop", "/contact", "/shipping", "/refunds", "/pricing", "/terms", "/privacy"];
 
 const escapeXml = (value: string) =>
