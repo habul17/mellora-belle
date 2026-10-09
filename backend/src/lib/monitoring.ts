@@ -12,7 +12,8 @@ export function startMonitoring() {
     if (!monitoringOn()) return;
 
     Sentry.init({
-        dsn: process.env.SENTRY_DSN,
+        // Pasting into Render can bring a space or quotes along with the key.
+        dsn: process.env.SENTRY_DSN!.trim().replace(/^["']|["']$/g, ""),
         environment: process.env.RENDER ? "production" : "development",
         // Errors only: no performance tracing, and no hooks into module
         // loading, which only tracing needs.
@@ -41,6 +42,9 @@ export function startMonitoring() {
             return breadcrumb.category === "console" ? null : breadcrumb;
         },
     });
+    if (!Sentry.getClient()?.getDsn()) {
+        console.error("SENTRY_DSN is set but isn't a valid Sentry DSN, so no alerts will be sent.");
+    }
 }
 
 // Something threw that nothing expected: a bug, or a service that is down.
@@ -61,12 +65,38 @@ export function reportProblem(message: string, key?: (string | number)[]) {
     });
 }
 
-// For the admin's "Send a test alert": true once Sentry has the report.
-export async function sendTestAlert() {
-    Sentry.captureMessage(`Test alert from the admin, ${new Date().toISOString()}`, {
+// For the admin's "Send a test alert". Waits for Sentry's own answer, so the
+// button only says it worked once Sentry has accepted the report. Returns
+// what went wrong, or nothing.
+export async function sendTestAlert(): Promise<string | undefined> {
+    const client = Sentry.getClient();
+    if (!client?.getDsn()) {
+        return "SENTRY_DSN on the server isn't a valid Sentry key. Copy the DSN from Sentry again.";
+    }
+
+    let eventId: string | undefined;
+    const answer = new Promise<number | undefined>((resolve) => {
+        const timer = setTimeout(() => done(undefined), 10_000);
+        const stop = client.on("afterSendEvent", (event, response) => {
+            if (event.event_id === eventId) done(response.statusCode);
+        });
+        function done(status: number | undefined) {
+            clearTimeout(timer);
+            stop();
+            resolve(status);
+        }
+    });
+    eventId = Sentry.captureMessage(`Test alert from the admin, ${new Date().toISOString()}`, {
         level: "error",
         // A new issue every time, so every test sends an email.
         fingerprint: ["test-alert", String(Date.now())],
     });
-    return Sentry.flush(5000);
+
+    // No status: the request never got an answer (network down, or
+    // Sentry is asking us to slow down).
+    const status = await answer;
+    if (status === undefined) return "Sentry didn't answer. Try again in a minute.";
+    if (status < 200 || status >= 300) {
+        return `Sentry refused the report (status ${status}). Check that SENTRY_DSN is this project's DSN.`;
+    }
 }

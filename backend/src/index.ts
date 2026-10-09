@@ -269,10 +269,9 @@ app.post("/admin/test-alert", requireAuth, requireAdmin, async (req, res) => {
     if (!monitoringOn()) {
         return res.status(503).json({ error: "Alerts aren't switched on: SENTRY_DSN isn't set on the server." });
     }
-    if (!(await sendTestAlert())) {
-        return res.status(502).json({ error: "Sentry didn't answer. Try again in a minute." });
-    }
-    res.json({ message: "Sent. The email should arrive within a few minutes." });
+    const problem = await sendTestAlert();
+    if (problem) return res.status(502).json({ error: problem });
+    res.json({ message: "Sentry has it. The email should arrive within a few minutes." });
 })
 
 // Step 1 of 2: a new secret to scan. It isn't used for logging in until step 2
