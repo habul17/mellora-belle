@@ -42,9 +42,14 @@ export function startMonitoring() {
             return breadcrumb.category === "console" ? null : breadcrumb;
         },
     });
-    if (!Sentry.getClient()?.getDsn()) {
+    const dsn = Sentry.getClient()?.getDsn();
+    if (!dsn) {
         console.error("SENTRY_DSN is set but isn't a valid Sentry DSN, so no alerts will be sent.");
+        return;
     }
+    // Which project the alerts go to, to check against Sentry's settings. Only
+    // the start of the key: enough to tell two keys apart.
+    console.log(`Error alerts on: Sentry project ${dsn.projectId} at ${dsn.host}, key ${(dsn.publicKey ?? "").slice(0, 6)}...`);
 }
 
 // Something threw that nothing expected: a bug, or a service that is down.
