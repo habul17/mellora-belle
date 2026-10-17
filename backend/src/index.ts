@@ -22,13 +22,13 @@ import { authenticator } from "otplib"
 import QRCode from "qrcode"
 import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
-import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, categoryBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
 import { loginLimits, loginCodeLimits, verifyLoginCodeLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
 import { checkShiprocketLogin, shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
-import { ProductAdminError, createProduct, updateProduct, addSize, listAdminProducts } from "./lib/productAdmin.js"
+import { ProductAdminError, createProduct, updateProduct, addSize, createCategory, listAdminProducts } from "./lib/productAdmin.js"
 import { siteOrigins, siteUrl } from "./lib/site.js"
 import { startMonitoring, monitoringOn, reportError, reportProblem, sendTestAlert } from "./lib/monitoring.js"
 
@@ -480,6 +480,19 @@ app.post("/admin/products/:id/sizes", requireAuth, requireAdmin, async (req, res
         const variant = await addSize(id, body.size, body.stockQuantity);
         await audit((req as any).user.userId, "product.size.add", "Product", id, { size: variant.size, sku: variant.sku, stockQuantity: variant.stockQuantity });
         res.status(201).json({ variant });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
+})
+
+app.post("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
+    const body = readBody(categoryBody, req, res);
+    if (!body) return;
+
+    try {
+        const category = await createCategory(body.name);
+        await audit((req as any).user.userId, "category.create", "Category", category.id, { name: category.name });
+        res.status(201).json({ category });
     } catch (err) {
         productAdminFailed(res, err);
     }

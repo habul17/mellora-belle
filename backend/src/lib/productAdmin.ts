@@ -4,7 +4,7 @@ import type { Size } from "../generated/prisma/client.js"
 
 // The admin's Products page: edit what the shop shows (name, description,
 // details, size chart, care, category, prices, weight, colour, photos, on sale
-// or not), add a product, add a size.
+// or not), add a product, add a size, add a category.
 // Nothing here deletes: a product or size that has ever been ordered stays in
 // old orders, so the admin switches it off (or sets its stock to 0) instead.
 
@@ -174,6 +174,26 @@ export async function addSize(productId: string, size: Size, stockQuantity: numb
     } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             throw new ProductAdminError(409, `This product already has size ${size}`);
+        }
+        throw err;
+    }
+}
+
+// A category the product form can choose ("Sarees"). Its slug is set once,
+// like a product's. "Co-ord Sets" and "co-ord sets" count as the same one.
+export async function createCategory(name: string) {
+    const slug = slugify(name);
+    if (!slug) throw new ProductAdminError(400, "Use some letters or numbers in the category name");
+
+    const taken = await prisma.category.findUnique({ where: { slug }, select: { name: true } });
+    if (taken) throw new ProductAdminError(409, `There's already a category called "${taken.name}"`);
+
+    try {
+        return await prisma.category.create({ data: { name, slug } });
+    } catch (err) {
+        // Two saves at once with the same name.
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            throw new ProductAdminError(409, "There's already a category with this name");
         }
         throw err;
     }

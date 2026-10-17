@@ -93,17 +93,38 @@ function bodyOf(draft: Draft) {
     };
 }
 
-function ProductForm({ draft, setDraft, categories, isNew }: {
+function ProductForm({ draft, setDraft, categories, addCategory, isNew }: {
     draft: Draft;
     setDraft: (update: (prev: Draft) => Draft) => void;
     categories: Category[];
+    // The new category, or the reason it wasn't added.
+    addCategory: (name: string) => Promise<Category | string>;
     isNew: boolean;
 }) {
+    // null while the "Add category" box is closed.
+    const [newCategory, setNewCategory] = useState<string | null>(null);
+    const [categoryNote, setCategoryNote] = useState("");
+    const [addingCategory, setAddingCategory] = useState(false);
     const set = (key: keyof Draft) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const value = e.target.value;
         setDraft((prev) => ({ ...prev, [key]: value }));
     };
     const photos = draft.images.split("\n").map((line) => line.trim()).filter(Boolean);
+
+    async function saveCategory() {
+        if (newCategory === null || !newCategory.trim()) return;
+        setAddingCategory(true);
+        setCategoryNote("");
+        const result = await addCategory(newCategory);
+        setAddingCategory(false);
+        if (typeof result === "string") {
+            setCategoryNote(result);
+            return;
+        }
+        setDraft((prev) => ({ ...prev, categoryId: result.id }));
+        setNewCategory(null);
+        setCategoryNote(`Added "${result.name}" and chose it for this product`);
+    }
 
     return (
         <div>
@@ -116,6 +137,18 @@ function ProductForm({ draft, setDraft, categories, isNew }: {
                         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                 </label>
+                {newCategory === null ? (
+                    <button type="button" onClick={() => { setNewCategory(""); setCategoryNote(""); }}>Add category</button>
+                ) : (
+                    <>
+                        <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} maxLength={50}
+                            placeholder="New category name" aria-label="New category name" autoFocus
+                            onKeyDown={(e) => { if (e.key === "Enter") saveCategory(); }} />
+                        <button type="button" onClick={saveCategory} disabled={addingCategory || !newCategory.trim()}>Save category</button>
+                        <button type="button" onClick={() => { setNewCategory(null); setCategoryNote(""); }} disabled={addingCategory}>Cancel</button>
+                    </>
+                )}
+                {categoryNote && <strong> {categoryNote}</strong>}
             </p>
             <p>
                 <label>Description (a blank line starts a new paragraph)<br />
@@ -288,6 +321,17 @@ function AdminProducts() {
         });
     }
 
+    async function addCategory(name: string): Promise<Category | string> {
+        try {
+            const data = await authFetch("/admin/categories", { method: "POST", body: JSON.stringify({ name }) });
+            if (data.error || !data.category) return data.error ?? "Something went wrong";
+            setCategories((prev) => [...prev, data.category].sort((a, b) => a.name.localeCompare(b.name)));
+            return data.category;
+        } catch {
+            return "Could not reach the server. Nothing was saved.";
+        }
+    }
+
     const note = (id: string) => message?.id === id && <strong> {message.text}</strong>;
 
     return (
@@ -310,7 +354,7 @@ function AdminProducts() {
                         </p>
                         {editingId === product.id && draft ? (
                             <>
-                                <ProductForm draft={draft} setDraft={(update) => setDraft((prev) => prev && update(prev))} categories={categories} isNew={false} />
+                                <ProductForm draft={draft} setDraft={(update) => setDraft((prev) => prev && update(prev))} categories={categories} addCategory={addCategory} isNew={false} />
                                 <p>
                                     <button onClick={() => saveEdit(product)} disabled={busy}>Save changes</button>
                                     <button onClick={close} disabled={busy}>Cancel</button>
@@ -343,7 +387,7 @@ function AdminProducts() {
                 <h2>Add a product</h2>
                 {editingId === "new" && draft ? (
                     <>
-                        <ProductForm draft={draft} setDraft={(update) => setDraft((prev) => prev && update(prev))} categories={categories} isNew />
+                        <ProductForm draft={draft} setDraft={(update) => setDraft((prev) => prev && update(prev))} categories={categories} addCategory={addCategory} isNew />
                         <p>
                             <button onClick={saveNew} disabled={busy}>Add product</button>
                             <button onClick={close} disabled={busy}>Cancel</button>

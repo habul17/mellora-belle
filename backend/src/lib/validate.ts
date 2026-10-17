@@ -132,6 +132,11 @@ export const newProductBody = z.object({
 
 export const addSizeBody = z.object({ size, stockQuantity });
 
+// A new category for the product form ("Sarees"). Shown above the product name.
+export const categoryBody = z.object({
+    name: text("Enter the category name", 50, "The category name must be under 50 characters"),
+});
+
 // ---- Checkout ----
 
 const FILL_IN = "Please fill in all address fields";
