@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { ButtonLink, Container, ErrorState, SlowHint } from "../components/ui"
 import { ProductGrid, ProductGridSkeleton } from "../components/ProductCard"
+import { ReelsSection } from "../components/Reels"
 import { ChatIcon, LockIcon, ReturnIcon, TruckIcon } from "../components/icons"
 import { useProducts } from "../lib/useProducts"
 import { usePageTitle } from "../lib/usePageTitle"
@@ -98,6 +99,8 @@ function Home() {
                     )}
                 </Container>
             </section>
+
+            <ReelsSection />
 
             <section className="pt-20 sm:pt-28">
                 <Container className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">

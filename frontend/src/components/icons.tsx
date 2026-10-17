@@ -46,3 +46,15 @@ export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
 export const SearchIcon = (p: SVGProps<SVGSVGElement>) => (
     <Icon {...p}><circle cx="11" cy="11" r="6" /><path d="m20 20-4.5-4.5" /></Icon>
 );
+export const PlayIcon = (p: SVGProps<SVGSVGElement>) => (
+    <Icon fill="currentColor" stroke="none" {...p}><path d="M8 5.5v13a.6.6 0 0 0 .9.5l10.2-6.5a.6.6 0 0 0 0-1L8.9 5a.6.6 0 0 0-.9.5Z" /></Icon>
+);
+export const InstagramIcon = (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}><rect x="3.5" y="3.5" width="17" height="17" rx="4.5" /><circle cx="12" cy="12" r="4" /><circle cx="17" cy="7" r="0.6" fill="currentColor" /></Icon>
+);
+export const SoundOnIcon = (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></Icon>
+);
+export const SoundOffIcon = (p: SVGProps<SVGSVGElement>) => (
+    <Icon {...p}><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" /><path d="m16 9.5 5 5M21 9.5l-5 5" /></Icon>
+);

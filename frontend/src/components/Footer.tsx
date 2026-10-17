@@ -31,6 +31,7 @@ function Footer() {
                     <ul className="space-y-2.5 text-sm">
                         <li><a href={`mailto:${business.email}`} className="break-all transition-colors hover:text-plum">{business.email}</a></li>
                         <li><a href={business.phoneHref} className="transition-colors hover:text-plum">{business.phone}</a></li>
+                        <li><a href={business.instagram.url} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-plum">Instagram {business.instagram.handle}</a></li>
                         <li className="text-muted">Payments secured by Razorpay</li>
                     </ul>
                 </div>

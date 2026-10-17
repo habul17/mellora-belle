@@ -22,13 +22,14 @@ import { authenticator } from "otplib"
 import QRCode from "qrcode"
 import helmet from "helmet"
 import { checkEnv } from "./lib/env.js"
-import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, categoryBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
+import { readBody, twoFactorConfirmBody, loginBody, loginCodeBody, verifyLoginCodeBody, forgotPasswordBody, resetPasswordBody, addToCartBody, updateCartItemBody, stockBody, productBody, newProductBody, addSizeBody, categoryBody, reelBody, checkoutBody, cancelRequestBody, returnRequestBody, declineBody, refundBody, orderStatusBody, razorpayWebhookBody, courierWebhookBody, MAX_PER_ITEM } from "./lib/validate.js"
 import { loginLimits, loginCodeLimits, verifyLoginCodeLimit, forgotPasswordLimits, resetPasswordLimit, refreshLimit, checkoutLimit, orderRequestLimit } from "./lib/rateLimits.js"
 import { sitemapXml } from "./lib/seo.js"
 import { audit } from "./lib/audit.js"
 import { checkShiprocketLogin, shiprocketEnabled } from "./lib/shiprocket.js"
 import { queueBooking, stopBooking, retryShipment, processShipments, processShipmentsSoon, applyCourierUpdate, parseShiprocketTime, ShipmentActionError } from "./lib/shipments.js"
 import { ProductAdminError, createProduct, updateProduct, addSize, createCategory, listAdminProducts } from "./lib/productAdmin.js"
+import { listReels, listAdminReels, createReel, deleteReel } from "./lib/reels.js"
 import { siteOrigins, siteUrl } from "./lib/site.js"
 import { startMonitoring, monitoringOn, reportError, reportProblem, sendTestAlert } from "./lib/monitoring.js"
 
@@ -493,6 +494,42 @@ app.post("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
         const category = await createCategory(body.name);
         await audit((req as any).user.userId, "category.create", "Category", category.id, { name: category.name });
         res.status(201).json({ category });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
+})
+
+// The home page's reels, newest first.
+app.get("/reels", async (req, res) => {
+    res.json({ reels: await listReels() });
+})
+
+app.get("/admin/reels", requireAuth, requireAdmin, async (req, res) => {
+    res.json({ reels: await listAdminReels() });
+})
+
+app.post("/admin/reels", requireAuth, requireAdmin, async (req, res) => {
+    const body = readBody(reelBody, req, res);
+    if (!body) return;
+
+    try {
+        const reel = await createReel(body);
+        await audit((req as any).user.userId, "reel.create", "Reel", reel.id, { instagramUrl: reel.instagramUrl, product: reel.product?.name ?? null });
+        res.status(201).json({ reel });
+    } catch (err) {
+        productAdminFailed(res, err);
+    }
+})
+
+app.delete("/admin/reels/:id", requireAuth, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+
+    if (!id || Array.isArray(id)) return res.status(400).json({ error: "Invalid id" });
+
+    try {
+        const reel = await deleteReel(id);
+        await audit((req as any).user.userId, "reel.delete", "Reel", id, { instagramUrl: reel.instagramUrl, videoUrl: reel.videoUrl });
+        res.json({ deleted: true });
     } catch (err) {
         productAdminFailed(res, err);
     }

@@ -24,6 +24,7 @@ export const business = {
     countryOfOrigin: "India",
     // The line under the name on the owner's logo.
     tagline: "Wear Your Confidence",
+    instagram: { handle: "@mellorabelle", url: "https://www.instagram.com/mellorabelle/" },
 };
 
 export const shipping = {

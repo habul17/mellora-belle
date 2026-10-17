@@ -137,6 +137,30 @@ export const categoryBody = z.object({
     name: text("Enter the category name", 50, "The category name must be under 50 characters"),
 });
 
+// ---- Reels (admin) ----
+
+// The reel's video, uploaded to Cloudinary like the photos: Instagram doesn't
+// let other sites play its videos, so the home page plays this copy.
+const VIDEO_LINK = "The video must be a Cloudinary video link (https://res.cloudinary.com/…/video/upload/…)";
+// The same reel on Instagram, for "View on Instagram". The app's share link
+// ends in tracking (?igsh=…) and the website's can include the shop's name
+// (/mellorabelle/reel/…); both become plain https://www.instagram.com/reel/….
+const INSTAGRAM_LINK = "Paste the reel's Instagram link (https://www.instagram.com/reel/…)";
+const INSTAGRAM_POST = /^https:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(reels?|p)\/([\w-]+)\/?(?:\?\S*)?$/;
+
+export const reelBody = z.object({
+    videoUrl: z.string({ error: VIDEO_LINK }).trim().max(500, VIDEO_LINK)
+        .regex(/^https:\/\/res\.cloudinary\.com\/[^/\s]+\/video\/upload\/\S+$/, VIDEO_LINK),
+    instagramUrl: z.string({ error: INSTAGRAM_LINK }).trim().max(500, INSTAGRAM_LINK)
+        .regex(INSTAGRAM_POST, INSTAGRAM_LINK)
+        .transform((url) => {
+            const [, kind, code] = url.match(INSTAGRAM_POST)!;
+            return `https://www.instagram.com/${kind === "p" ? "p" : "reel"}/${code}/`;
+        }),
+    // Left out or null: a reel that isn't about one piece (no "Shop this").
+    productId: text("Choose a product", 64, "Choose a product").nullish(),
+});
+
 // ---- Checkout ----
 
 const FILL_IN = "Please fill in all address fields";

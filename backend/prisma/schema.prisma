@@ -45,6 +45,22 @@ model Product {
   categoryId     String
   category       Category  @relation(fields: [categoryId], references: [id])
   variants       Variant[]
+  reels          Reel[]
+}
+
+// A reel from the shop's Instagram, shown on the home page, newest first.
+// Instagram doesn't let other sites play its videos, so the admin uploads a
+// copy to Cloudinary (videoUrl); instagramUrl opens the original. productId:
+// the piece it shows, for "Shop this" (none for a reel about the shop).
+model Reel {
+  id           String   @id @default(cuid())
+  videoUrl     String
+  instagramUrl String
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Variant {

@@ -4,6 +4,7 @@ import ProductList from "./pages/ProductList"
 import ProductDetail from "./pages/ProductDetail"
 import AdminStock from "./pages/AdminStock"
 import AdminProducts from "./pages/AdminProducts"
+import AdminReels from "./pages/AdminReels"
 import Login from "./pages/Login"
 import AdminLogin from "./pages/AdminLogin"
 import ForgotPassword from "./pages/ForgotPassword"
@@ -38,6 +39,7 @@ function App() {
           <Route path="/products/:slug" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminStock />} />
           <Route path="/admin/products" element={<AdminProducts />} />
+          <Route path="/admin/reels" element={<AdminReels />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
