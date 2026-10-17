@@ -61,15 +61,16 @@ function Home() {
                 </div>
             </section>
 
-            <section className="border-y border-stone bg-sand mt-16 sm:mt-24">
-                <Container className="grid grid-cols-2 gap-x-6 gap-y-8 py-10 lg:grid-cols-4">
-                    {PROMISES.map(({ Icon, title, text }) => (
-                        <div key={title} className="flex flex-col items-start gap-3 sm:flex-row">
-                            <Icon className="shrink-0 text-plum" width={26} height={26} />
-                            <div>
-                                <h2 className="font-sans text-sm font-medium">{title}</h2>
-                                <p className="mt-1 text-sm leading-relaxed text-muted">{text}</p>
-                            </div>
+            {/* Deep plum with the logo's gold, centred, with a thin gold line
+                between columns (two by two on phones, four in a row on wide screens). */}
+            <section className="mt-16 bg-plum-dark text-ivory sm:mt-24">
+                <Container className="grid grid-cols-2 gap-y-12 py-14 lg:grid-cols-4 lg:py-20">
+                    {PROMISES.map(({ Icon, title, text }, i) => (
+                        <div key={title} className={`flex flex-col items-center border-gold/25 px-3 text-center lg:px-6 ${i % 2 === 1 ? "border-l" : ""} ${i === 2 ? "lg:border-l" : ""}`}>
+                            <Icon className="text-gold" width={30} height={30} strokeWidth={1.1} />
+                            <h2 className="mt-5 text-xl leading-tight sm:text-2xl">{title}</h2>
+                            <span className="mt-4 h-px w-8 bg-gold" aria-hidden="true" />
+                            <p className="mt-4 max-w-[15rem] text-[13px] leading-relaxed text-ivory/75">{text}</p>
                         </div>
                     ))}
                 </Container>
